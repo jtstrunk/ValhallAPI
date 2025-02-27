@@ -2,6 +2,7 @@ import dot_env
 import dot_env/env
 import gleam/dynamic/decode
 import gleam/erlang/process
+import gleam/http
 import gleam/int
 import gleam/io
 import gleam/json
@@ -171,7 +172,7 @@ pub fn main() {
           sqlight.query(
             sql,
             on: conn,
-            with: [ 
+            with: [
               sqlight.text(name),
               sqlight.text(name),
               sqlight.text(name),
@@ -199,7 +200,7 @@ pub fn main() {
         }
         io.debug("Retrieving Games For " <> name)
         io.debug("Index " <> int.to_string(index))
-        let offset = {index - 1} * 12
+        let offset = { index - 1 } * 12
         let limit = 12
         io.debug(offset)
         io.debug(limit)
@@ -232,78 +233,91 @@ pub fn main() {
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
       }
-      ["insertgame"] -> {
-        io.debug("Inserting Game")
-        use json_result <- wisp.require_json(req)
-        let assert Ok(#(
-          posterid,
-          gamename,
-          winnername,
-          winnerscore,
-          secondname,
-          secondscore,
-          thirdname,
-          thirdscore,
-          fourthname,
-          fourthscore,
-          fifthname,
-          fifthscore,
-          date,
-        )) = decode.run(json_result, insert_decoder())
-
-        let assert Ok(conn) = sqlight.open("tracker.db")
-
-        let sql_gameid = "SELECT MAX(gameID) FROM gameRecord;"
-        let assert Ok([[maxgameid]]) =
-          sqlight.query(
-            sql_gameid,
-            with: [],
-            on: conn,
-            expecting: decode.list(decode.int),
-          )
-
-        let gamedate = case date {
-          option.Some(date) -> date
-          option.None -> {
-            date.current_local()
-            |> date.to_string
+      ["insertgame"] ->
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
           }
+          http.Post -> {
+            io.debug("Inserting Game")
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(
+              posterid,
+              gamename,
+              winnername,
+              winnerscore,
+              secondname,
+              secondscore,
+              thirdname,
+              thirdscore,
+              fourthname,
+              fourthscore,
+              fifthname,
+              fifthscore,
+              date,
+            )) = decode.run(json_result, insert_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+
+            let sql_gameid = "SELECT MAX(gameID) FROM gameRecord;"
+            let assert Ok([[maxgameid]]) =
+              sqlight.query(
+                sql_gameid,
+                with: [],
+                on: conn,
+                expecting: decode.list(decode.int),
+              )
+
+            let gamedate = case date {
+              option.Some(date) -> date
+              option.None -> {
+                date.current_local()
+                |> date.to_string
+              }
+            }
+
+            let sql =
+              "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+
+            let _ =
+              io.debug(
+                sqlight.query(sql, conn, decode.int, with: [
+                  sqlight.int(maxgameid + 1),
+                  sqlight.int(posterid),
+                  sqlight.text(gamename),
+                  sqlight.text(winnername),
+                  sqlight.int(winnerscore),
+                  sqlight.text(secondname),
+                  sqlight.int(secondscore),
+                  sqlight.nullable(sqlight.text, thirdname),
+                  sqlight.nullable(sqlight.int, thirdscore),
+                  sqlight.nullable(sqlight.text, fourthname),
+                  sqlight.nullable(sqlight.int, fourthscore),
+                  sqlight.nullable(sqlight.text, fifthname),
+                  sqlight.nullable(sqlight.int, fifthscore),
+                  sqlight.text(gamedate),
+                ]),
+              )
+
+            let inserted_game_json =
+              json.object([
+                #("gameid", json.int(maxgameid + 1)),
+                #("event", json.string("Inserted")),
+              ])
+
+            json.to_string_tree(inserted_game_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> wisp.method_not_allowed([http.Options, http.Post])
         }
 
-        let sql =
-          "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, date)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-
-        let _ =
-          io.debug(
-            sqlight.query(sql, conn, decode.int, with: [
-              sqlight.int(maxgameid + 1),
-              sqlight.int(posterid),
-              sqlight.text(gamename),
-              sqlight.text(winnername),
-              sqlight.int(winnerscore),
-              sqlight.text(secondname),
-              sqlight.int(secondscore),
-              sqlight.nullable(sqlight.text, thirdname),
-              sqlight.nullable(sqlight.int, thirdscore),
-              sqlight.nullable(sqlight.text, fourthname),
-              sqlight.nullable(sqlight.int, fourthscore),
-              sqlight.nullable(sqlight.text, fifthname),
-              sqlight.nullable(sqlight.int, fifthscore),
-              sqlight.text(gamedate),
-            ]),
-          )
-
-        let inserted_game_json =
-          json.object([
-            #("gameid", json.int(maxgameid + 1)),
-            #("event", json.string("Inserted")),
-          ])
-
-        json.to_string_tree(inserted_game_json)
-        |> wisp.json_response(200)
-        |> wisp.set_header("access-control-allow-origin", "*")
-      }
       ["updategame"] -> {
         use json_result <- wisp.require_json(req)
         io.debug("updating Game")
@@ -516,7 +530,7 @@ pub fn calc_most_won(name) {
 pub fn find_unique_names(name) {
   let assert Ok(conn) = sqlight.open("tracker.db")
   let sql =
-    "SELECT DISTINCT name
+    "SELECT name, COUNT(*) as frequency
     FROM (
       SELECT winnerName AS name FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? OR fifthName = ?
       UNION ALL
@@ -528,7 +542,10 @@ pub fn find_unique_names(name) {
       UNION ALL
       SELECT fifthName FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? OR fifthName = ?
     ) AS names
-    WHERE name != ? AND name IS NOT NULL;"
+    WHERE name != ? AND name IS NOT NULL
+    GROUP BY name
+    ORDER BY frequency DESC;"
+
   let assert Ok(unique_names) =
     sqlight.query(
       sql,
@@ -565,27 +582,3 @@ pub fn find_unique_names(name) {
     )
   unique_names
 }
-// let name = "Pac-Man"
-// let my_json =
-//   json.to_string(
-//     json.object([
-//       #("game", json.string(name)),
-//       #("score", json.int(3_333_360)),
-//     ]),
-//   )
-// let assert Ok(_) =
-//   wisp_mist.handler(
-//     fn(_) {
-//       wisp.json_response(
-//         string_tree.from_string(my_json),
-//         200,
-//       )
-//     },
-//     secret_key_base,
-//   )
-//   // wisp_mist.handler(fn(_) { wisp.html_response(string_tree.from_string("Hello"), 200) }, "secret_key")
-//   |> mist.new
-//   |> mist.port(8000)
-//   |> mist.start_http
-
-// process.sleep_forever()
