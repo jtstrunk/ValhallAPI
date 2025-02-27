@@ -319,54 +319,67 @@ pub fn main() {
         }
 
       ["updategame"] -> {
-        use json_result <- wisp.require_json(req)
-        io.debug("updating Game")
-        io.debug(json_result)
-        let assert Ok(#(
-          gameid,
-          winnername,
-          winnerscore,
-          secondname,
-          secondscore,
-          thirdname,
-          thirdscore,
-          fourthname,
-          fourthscore,
-          fifthname,
-          fifthscore,
-          date,
-        )) = decode.run(json_result, update_decoder())
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            io.debug("updating Game")
+            io.debug(json_result)
+            let assert Ok(#(
+              gameid,
+              winnername,
+              winnerscore,
+              secondname,
+              secondscore,
+              thirdname,
+              thirdscore,
+              fourthname,
+              fourthscore,
+              fifthname,
+              fifthscore,
+              date,
+            )) = decode.run(json_result, update_decoder())
 
-        let assert Ok(conn) = sqlight.open("tracker.db")
-        let sql =
-          "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, date = ? WHERE gameID = ?"
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, date = ? WHERE gameID = ?"
 
-        let _ =
-          io.debug(
-            sqlight.query(sql, conn, decode.int, with: [
-              sqlight.text(winnername),
-              sqlight.int(winnerscore),
-              sqlight.text(secondname),
-              sqlight.int(secondscore),
-              sqlight.nullable(sqlight.text, thirdname),
-              sqlight.nullable(sqlight.int, thirdscore),
-              sqlight.nullable(sqlight.text, fourthname),
-              sqlight.nullable(sqlight.int, fourthscore),
-              sqlight.nullable(sqlight.text, fifthname),
-              sqlight.nullable(sqlight.int, fifthscore),
-              sqlight.text(date),
-              sqlight.int(gameid),
-            ]),
-          )
+            let _ =
+              io.debug(
+                sqlight.query(sql, conn, decode.int, with: [
+                  sqlight.text(winnername),
+                  sqlight.int(winnerscore),
+                  sqlight.text(secondname),
+                  sqlight.int(secondscore),
+                  sqlight.nullable(sqlight.text, thirdname),
+                  sqlight.nullable(sqlight.int, thirdscore),
+                  sqlight.nullable(sqlight.text, fourthname),
+                  sqlight.nullable(sqlight.int, fourthscore),
+                  sqlight.nullable(sqlight.text, fifthname),
+                  sqlight.nullable(sqlight.int, fifthscore),
+                  sqlight.text(date),
+                  sqlight.int(gameid),
+                ]),
+              )
 
-        let updated_game_json =
-          json.object([
-            #("gameid", json.int(gameid)),
-            #("event", json.string("Updated")),
-          ])
-        json.to_string_tree(updated_game_json)
-        |> wisp.json_response(200)
-        |> wisp.set_header("access-control-allow-origin", "*")
+            let updated_game_json =
+              json.object([
+                #("gameid", json.int(gameid)),
+                #("event", json.string("Updated")),
+              ])
+            json.to_string_tree(updated_game_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> wisp.method_not_allowed([http.Options, http.Post])
+        }
       }
       ["getuserstats", encoded_name] -> {
         let name = case uri.percent_decode(encoded_name) {
