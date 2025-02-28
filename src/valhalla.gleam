@@ -18,9 +18,31 @@ import wisp/wisp_mist
 
 pub fn game_name_decoder() {
   use gamename <- decode.field(0, decode.string)
-
   // let rowjson = json.object([#("gamename", json.string(gamename))])
   decode.success(gamename)
+}
+
+// pub fn login_decoder() {
+//   use username <- decode.field(0, decode.string)
+//   use password <- decode.field(1, decode.string)
+//   // let rowjson = json.object([#("gamename", json.string(gamename))])
+//   let userjson =
+//     json.object([
+//       #("username", json.string(username)),
+//       #("password", json.string(password)),
+//     ])
+//   decode.success(userjson)
+// }
+
+pub fn login_decoder() {
+  use username <- decode.field("username", decode.string)
+  use password <- decode.field("password", decode.string)
+  decode.success(#(username, password))
+}
+
+pub fn userid_decoder() {
+  use id <- decode.field(0, decode.int)
+  decode.success(id)
 }
 
 pub fn unique_name_decoder() {
@@ -317,7 +339,6 @@ pub fn main() {
           }
           _ -> wisp.method_not_allowed([http.Options, http.Post])
         }
-
       ["updategame"] -> {
         case req.method {
           http.Options -> {
@@ -416,6 +437,35 @@ pub fn main() {
         json.to_string_tree(name_rows)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["login"] -> {
+        use json_result <- wisp.require_json(req)
+        let assert Ok(#(username, password)) =
+          decode.run(json_result, login_decoder())
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql = "SELECT id FROM users WHERE username = ? AND password = ?"
+
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.text(username), sqlight.text(password)],
+            expecting: userid_decoder(),
+          )
+
+        case list.first(result) {
+          Ok(userid) -> {
+            json.to_string_tree(json.object([#("userid", json.int(userid))]))
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+          }
+          Error(_) -> {
+            json.to_string_tree(json.object([#("userid", json.int(0))]))
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+          }
+        }
       }
       _ -> wisp.not_found()
     }
