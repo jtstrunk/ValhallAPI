@@ -439,31 +439,66 @@ pub fn main() {
         |> wisp.set_header("access-control-allow-origin", "*")
       }
       ["login"] -> {
-        use json_result <- wisp.require_json(req)
-        let assert Ok(#(username, password)) =
-          decode.run(json_result, login_decoder())
-
-        let assert Ok(conn) = sqlight.open("tracker.db")
-        let sql = "SELECT id FROM users WHERE username = ? AND password = ?"
-
-        let assert Ok(result) =
-          sqlight.query(
-            sql,
-            on: conn,
-            with: [sqlight.text(username), sqlight.text(password)],
-            expecting: userid_decoder(),
-          )
-
-        case list.first(result) {
-          Ok(userid) -> {
-            json.to_string_tree(json.object([#("userid", json.int(userid))]))
-            |> wisp.json_response(200)
+        case req.method {
+          http.Options -> {
+            wisp.ok()
             |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
           }
-          Error(_) -> {
-            json.to_string_tree(json.object([#("userid", json.int(0))]))
-            |> wisp.json_response(200)
-            |> wisp.set_header("access-control-allow-origin", "*")
+          http.Post -> {
+            io.debug("GETTING")
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(username, password)) =
+              decode.run(json_result, login_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql = "SELECT id FROM users WHERE username = ? AND password = ?"
+
+            let assert Ok(result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [sqlight.text(username), sqlight.text(password)],
+                expecting: userid_decoder(),
+              )
+
+            case list.first(result) {
+              Ok(userid) -> {
+                json.to_string_tree(
+                  json.object([#("userid", json.int(userid))]),
+                )
+                |> wisp.json_response(200)
+                |> wisp.set_header("access-control-allow-origin", "*")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "GET, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
+              }
+              Error(_) -> {
+                json.to_string_tree(json.object([#("userid", json.int(0))]))
+                |> wisp.json_response(200)
+                |> wisp.set_header("access-control-allow-origin", "*")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "GET, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
+              }
+            }
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
           }
         }
       }
