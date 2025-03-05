@@ -22,18 +22,6 @@ pub fn game_name_decoder() {
   decode.success(gamename)
 }
 
-// pub fn login_decoder() {
-//   use username <- decode.field(0, decode.string)
-//   use password <- decode.field(1, decode.string)
-//   // let rowjson = json.object([#("gamename", json.string(gamename))])
-//   let userjson =
-//     json.object([
-//       #("username", json.string(username)),
-//       #("password", json.string(password)),
-//     ])
-//   decode.success(userjson)
-// }
-
 pub fn login_decoder() {
   use username <- decode.field("username", decode.string)
   use password <- decode.field("password", decode.string)
@@ -458,6 +446,78 @@ pub fn main() {
             let assert Ok(conn) = sqlight.open("tracker.db")
             let sql = "SELECT id FROM users WHERE username = ? AND password = ?"
 
+            let assert Ok(result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [sqlight.text(username), sqlight.text(password)],
+                expecting: userid_decoder(),
+              )
+
+            case list.first(result) {
+              Ok(userid) -> {
+                json.to_string_tree(
+                  json.object([#("userid", json.int(userid))]),
+                )
+                |> wisp.json_response(200)
+                |> wisp.set_header("access-control-allow-origin", "*")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "GET, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
+              }
+              Error(_) -> {
+                json.to_string_tree(json.object([#("userid", json.int(0))]))
+                |> wisp.json_response(200)
+                |> wisp.set_header("access-control-allow-origin", "*")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "GET, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
+              }
+            }
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
+      ["register"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(username, password)) =
+              decode.run(json_result, login_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql = "insert into users (username, password) values (?, ?)"
+
+            let assert Ok(_insert) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [sqlight.text(username), sqlight.text(password)],
+                expecting: userid_decoder(),
+              )
+
+            let sql = "SELECT id FROM users WHERE username = ? AND password = ?"
             let assert Ok(result) =
               sqlight.query(
                 sql,
