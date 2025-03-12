@@ -39,13 +39,22 @@ pub fn userid_decoder() {
   decode.success(id)
 }
 
+pub fn username_decoder() {
+  use name <- decode.field(0, decode.string)
+  decode.success(name)
+}
+
+pub fn follow_decoder() {
+  use id <- decode.field(0, decode.int)
+  let name = get_user_name(id)
+  let rowjson = json.object([#("username", json.string(name))])
+  decode.success(rowjson)
+}
+
 pub fn users_decoder() {
   use username <- decode.field(0, decode.string)
 
-    let rowjson =
-    json.object([
-      #("username", json.string(username))
-    ])
+  let rowjson = json.object([#("username", json.string(username))])
   decode.success(rowjson)
 }
 
@@ -454,7 +463,6 @@ pub fn main() {
             |> wisp.set_header("access-control-allow-headers", "Content-Type")
           }
           http.Post -> {
-            io.debug("GETTING")
             use json_result <- wisp.require_json(req)
             let assert Ok(#(username, password)) =
               decode.run(json_result, login_decoder())
@@ -582,17 +590,60 @@ pub fn main() {
         let assert Ok(conn) = sqlight.open("tracker.db")
         let sql = "SELECT username FROM users"
         let assert Ok(result) =
-          sqlight.query(
-            sql,
-            on: conn,
-            with: [],
-            expecting: users_decoder(),
-          )
+          sqlight.query(sql, on: conn, with: [], expecting: users_decoder())
 
         let usernamerows = json.preprocessed_array(result)
         json.to_string_tree(usernamerows)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["getfollowers", encoded_name] -> {
+        let name = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let userid = get_user_id(name)
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql = "SELECT follower FROM following where following = ?"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(userid)],
+            expecting: follow_decoder(),
+          )
+
+        let followers = json.preprocessed_array(result)
+        json.to_string_tree(followers)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
+      ["getfollowing", encoded_name] -> {
+        let name = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let userid = get_user_id(name)
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql = "SELECT following FROM following where follower = ?"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(userid)],
+            expecting: follow_decoder(),
+          )
+
+        let followers = json.preprocessed_array(result)
+        json.to_string_tree(followers)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
       }
       ["followuser"] -> {
         case req.method {
@@ -612,7 +663,8 @@ pub fn main() {
 
             let userid = get_user_id(following)
             let assert Ok(conn) = sqlight.open("tracker.db")
-            let sql = "SELECT EXISTS (SELECT 1 FROM following WHERE follower = ? AND following = ?)"
+            let sql =
+              "SELECT EXISTS (SELECT 1 FROM following WHERE follower = ? AND following = ?)"
             let assert Ok(relationshipexistencelist) =
               sqlight.query(
                 sql,
@@ -621,14 +673,17 @@ pub fn main() {
                 expecting: userid_decoder(),
               )
 
-            let relationshipexistence = case list.first(relationshipexistencelist) {
+            let relationshipexistence = case
+              list.first(relationshipexistencelist)
+            {
               Ok(relationshipexistence) -> relationshipexistence
               Error(_) -> 0
             }
 
             case relationshipexistence {
               0 -> {
-                let sql = "INSERT INTO following (follower, following) VALUES (?, ?)"
+                let sql =
+                  "INSERT INTO following (follower, following) VALUES (?, ?)"
                 let assert Ok(_result) =
                   sqlight.query(
                     sql,
@@ -638,27 +693,35 @@ pub fn main() {
                   )
 
                 let followed_user_json =
-                  json.object([
-                    #("event", json.string("Followed User"))
-                  ])
+                  json.object([#("event", json.string("Followed User"))])
 
                 json.to_string_tree(followed_user_json)
                 |> wisp.json_response(200)
                 |> wisp.set_header("access-control-allow-origin", "*")
-                |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
-                |> wisp.set_header("access-control-allow-headers", "Content-Type")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "POST, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
               }
               _ -> {
                 let followed_user_json =
-                json.object([
-                  #("event", json.string("User Already Followed"))
-                ])
+                  json.object([#("event", json.string("User Already Followed"))])
 
                 json.to_string_tree(followed_user_json)
                 |> wisp.json_response(200)
                 |> wisp.set_header("access-control-allow-origin", "*")
-                |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
-                |> wisp.set_header("access-control-allow-headers", "Content-Type")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "POST, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
               }
             }
           }
@@ -685,7 +748,8 @@ pub fn main() {
 
             let userid = get_user_id(following)
             let assert Ok(conn) = sqlight.open("tracker.db")
-            let sql = "DELETE FROM following WHERE follower = ? AND following = ?"
+            let sql =
+              "DELETE FROM following WHERE follower = ? AND following = ?"
             let assert Ok(_result) =
               sqlight.query(
                 sql,
@@ -695,9 +759,7 @@ pub fn main() {
               )
 
             let followed_user_json =
-              json.object([
-                #("event", json.string("Unfollowed User"))
-              ])
+              json.object([#("event", json.string("Unfollowed User"))])
 
             json.to_string_tree(followed_user_json)
             |> wisp.json_response(200)
@@ -901,14 +963,29 @@ pub fn get_user_id(username: String) {
     sqlight.query(
       sql,
       on: conn,
-      with: [
-        sqlight.text(name)
-      ],
+      with: [sqlight.text(name)],
       expecting: userid_decoder(),
     )
 
   case list.first(userid_list) {
     Ok(id) -> id
     Error(_) -> 0
+  }
+}
+
+pub fn get_user_name(userid: Int) {
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql = "SELECT username FROM users WHERE id = ? LIMIT 1"
+  let assert Ok(username_list) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [sqlight.int(userid)],
+      expecting: username_decoder(),
+    )
+
+  case list.first(username_list) {
+    Ok(username) -> username
+    Error(_) -> ""
   }
 }
