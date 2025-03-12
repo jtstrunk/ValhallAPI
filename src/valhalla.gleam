@@ -597,6 +597,81 @@ pub fn main() {
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
       }
+      ["getuserelationship"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(follower, following)) =
+              decode.run(json_result, follower_decoder())
+
+            let userid = get_user_id(following)
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "SELECT EXISTS (SELECT 1 FROM following WHERE follower = ? AND following = ?)"
+            let assert Ok(relationshipexistencelist) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [sqlight.int(follower), sqlight.int(userid)],
+                expecting: userid_decoder(),
+              )
+
+            let relationshipexistence = case
+              list.first(relationshipexistencelist)
+            {
+              Ok(relationshipexistence) -> relationshipexistence
+              Error(_) -> 0
+            }
+
+            case relationshipexistence {
+              0 -> {
+                let followed_user_json =
+                  json.object([#("relationship", json.string("Not Following User"))])
+
+                json.to_string_tree(followed_user_json)
+                |> wisp.json_response(200)
+                |> wisp.set_header("access-control-allow-origin", "*")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "POST, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
+              }
+              _ -> {
+                let followed_user_json =
+                  json.object([#("relationship", json.string("Following User"))])
+
+                json.to_string_tree(followed_user_json)
+                |> wisp.json_response(200)
+                |> wisp.set_header("access-control-allow-origin", "*")
+                |> wisp.set_header(
+                  "access-control-allow-methods",
+                  "POST, OPTIONS",
+                )
+                |> wisp.set_header(
+                  "access-control-allow-headers",
+                  "Content-Type",
+                )
+              }
+            }
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
       ["getfollowers", encoded_name] -> {
         let name = case uri.percent_decode(encoded_name) {
           Ok(decoded_name) -> decoded_name
