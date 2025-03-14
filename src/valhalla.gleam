@@ -7,9 +7,11 @@ import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
+import gleam/dict
 import gleam/option
 import gleam/string_tree
 import gleam/uri
+import tempo
 import mist
 import sqlight
 import tempo/date
@@ -259,12 +261,105 @@ pub fn main() {
               sqlight.int(limit),
               sqlight.int(offset),
             ],
-            expecting: games_row_decoder(),
+            expecting: newgames_row_decoder(),
           )
-        let gamerows = json.preprocessed_array(rows)
-        // wisp.json_response(json.to_string_tree(gamerows), 200)
 
-        json.to_string_tree(gamerows)
+        io.debug("JOSH GAMES")
+        io.debug(rows)
+
+        // let firstdate = tempo.format_utc(tempo.ISO8601Seconds)
+        // let firstdate = case rows {
+        //   [first, ..] -> {
+        //     io.println("The date of the first game record is: " <> first.date)
+        //     first.date
+        //   }
+        //   [] -> {
+        //     io.println("No game records found")
+        //     ""  // or use an Option type like `None` if you prefer
+        //   }
+        // }
+        let firstdate = case index {
+          1 -> {
+              tempo.format_utc(tempo.ISO8601Seconds)
+            }
+          _ -> case rows {
+            [first, ..] -> {
+              io.println("The date of the first game record is: " <> first.date)
+              first.date
+            }
+            [] -> {
+              io.println("No game records found")
+              ""  // or use an Option type like `None` if you prefer
+            }
+          }
+        }
+
+        let lastdate = case list.last(rows) {
+          Ok(last) -> {
+            last.date
+          }
+          Error(_) -> {
+            io.println("No game records found")
+            ""  // or use an Option type like `None` if you prefer
+          }
+        }
+
+        let users = ["john", "thetwinmeister", "ethangambles"]
+        io.debug(users)
+        io.debug(" ")
+        io.debug(" ")
+
+        let sql =
+          "SELECT * FROM gameRecord WHERE (winnerName = ? OR secondName = ?
+          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ?)
+          AND date <= ? AND date >= ? ORDER BY gameID;"
+
+
+
+
+        // io.debug("following_games")
+        // let all_rows = following_games(users, firstdate, lastdate, conn, sql)
+        // io.debug("all_rows")
+        // io.debug(all_rows)
+        // let combinedgames = list.append(all_rows, rows)
+        // let new_rows = combinedgames |> set.from_list |> set.to_list |> list.sort(by: fn(a, b) { int.compare(a.gameid, b.gameid) }) |> list.reverse
+        // io.debug("new_rows")
+        // io.debug(new_rows)
+
+        // let json = list.map(new_rows, games_row_encoder)
+        // let gamejson = json.preprocessed_array(json)
+
+        // between
+        io.debug("following_games")
+        let all_rows = following_games(users, firstdate, lastdate, conn, sql)
+        io.debug("all_rows")
+        io.debug(all_rows)
+
+        let combinedgames = list.append(all_rows, rows)
+
+        let new_rows = 
+          combinedgames
+          |> list.fold(
+            dict.new(),
+            fn(acc, game) {
+              dict.insert(acc, game.gameid, game)
+            }
+          )
+          |> dict.values
+          |> list.sort(by: fn(a, b) { int.compare(b.gameid, a.gameid) })
+
+        io.debug("new_rows")
+        io.debug(new_rows)
+
+        let json = list.map(new_rows, games_row_encoder)
+        let gamejson = json.preprocessed_array(json)
+        
+
+        // these
+        io.debug(" ")
+        
+
+        json.to_string_tree(gamejson)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
       }
@@ -712,9 +807,14 @@ pub fn main() {
             with: [sqlight.int(userid)],
             expecting: follow_decoder(),
           )
-
+        io.debug("result")
+        io.debug(result)
         let followers = json.preprocessed_array(result)
+        io.debug("followers")
+        io.debug(followers)
         json.to_string_tree(followers)
+        io.debug("json.to_string_tree(followers)")
+        io.debug(json.to_string_tree(followers))
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
         |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
@@ -1064,3 +1164,156 @@ pub fn get_user_name(userid: Int) {
     Error(_) -> ""
   }
 }
+
+pub fn following_games(users: List(String), startdate, enddate, conn, sql) -> List(GameRecord) {
+  following_games_recursive(users, startdate, enddate, conn, sql, [])
+}
+
+fn following_games_recursive(
+  users: List(String),
+  startdate,
+  enddate,
+  conn,
+  sql,
+  acc: List(GameRecord),
+) -> List(GameRecord) {
+  case users {
+    [] -> acc  // Base case: return the accumulated rows
+    [head, ..tail] -> {
+      io.debug(head)  // Print the current user
+      
+      let assert Ok(rows) =
+        sqlight.query(
+          sql,
+          on: conn,
+          with: [
+            sqlight.text(head),
+            sqlight.text(head),
+            sqlight.text(head),
+            sqlight.text(head),
+            sqlight.text(head),
+            sqlight.text(head),
+            sqlight.text(startdate),
+            sqlight.text(enddate),
+          ],
+          expecting: newgames_row_decoder(),
+        )
+      
+      io.debug("gamerows")
+      io.debug(rows)
+      
+      // Add the rows to the accumulator and recurse
+      let new_acc = list.append(acc, rows)
+      following_games_recursive(tail, startdate, enddate, conn, sql, new_acc)
+    }
+  }
+}
+
+
+// pub fn following_gamesold(users: List(String), startdate, enddate, conn, sql) {
+//   case users {
+//     [] -> Nil  // Base case: empty list, do nothing
+//     [head, ..tail] -> {
+//       io.debug(head)  // Print the first element
+//       let assert Ok(rows) =
+//           sqlight.query(
+//             sql,
+//             on: conn,
+//             with: [
+//               sqlight.text(head),
+//               sqlight.text(head),
+//               sqlight.text(head),
+//               sqlight.text(head),
+//               sqlight.text(head),
+//               sqlight.text(head),
+//               sqlight.text(startdate),
+//               sqlight.text(enddate),
+//             ],
+//             expecting: newgames_row_decoder(),
+//           )
+//        io.debug("gamerows")
+//        io.debug(rows)
+//       following_games(tail, startdate, enddate, conn, sql)
+//     }
+//   }
+// }
+
+
+
+pub type GameRecord {
+  GameRecord(
+    gameid: Int,
+    posterid: Int,
+    gamename: String,
+    winnername: String,
+    winnerscore: Int,
+    secondname: String,
+    secondscore: Int,
+    thirdname: option.Option(String),
+    thirdscore: option.Option(Int),
+    fourthname: option.Option(String),
+    fourthscore: option.Option(Int),
+    date: String
+  )
+}
+
+pub fn newgames_row_decoder() {
+  use gameid <- decode.field(0, decode.int)
+  use posterid <- decode.field(1, decode.int)
+  use gamename <- decode.field(2, decode.string)
+  use winnername <- decode.field(3, decode.string)
+  use winnerscore <- decode.field(4, decode.int)
+  use secondname <- decode.field(5, decode.string)
+  use secondscore <- decode.field(6, decode.int)
+  use thirdname <- decode.field(7, decode.optional(decode.string))
+  use thirdscore <- decode.field(8, decode.optional(decode.int))
+  use fourthname <- decode.field(9, decode.optional(decode.string))
+  use fourthscore <- decode.field(10, decode.optional(decode.int))
+  use date <- decode.field(15, decode.string)
+
+  decode.success(GameRecord(
+    gameid,
+    posterid,
+    gamename,
+    winnername,
+    winnerscore,
+    secondname,
+    secondscore,
+    thirdname,
+    thirdscore,
+    fourthname,
+    fourthscore,
+    date
+  ))
+}
+
+pub fn games_row_encoder(record: GameRecord) -> json.Json {
+  json.object([
+    #("gameid", json.int(record.gameid)),
+    #("posterid", json.int(record.posterid)),
+    #("gamename", json.string(record.gamename)),
+    #("winnername", json.string(record.winnername)),
+    #("winnerscore", json.int(record.winnerscore)),
+    #("secondname", json.string(record.secondname)),
+    #("secondscore", json.int(record.secondscore)),
+    #(
+      "thirdname",
+      record.thirdname |> option.map(json.string) |> option.unwrap(json.null()),
+    ),
+    #(
+      "thirdscore",
+      record.thirdscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
+    #(
+      "fourthname",
+      record.fourthname |> option.map(json.string) |> option.unwrap(json.null()),
+    ),
+    #(
+      "fourthscore",
+      record.fourthscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
+    #("date", json.string(record.date)),
+  ])
+}
+
+// how can I add an accumulator that adds all of them together?
