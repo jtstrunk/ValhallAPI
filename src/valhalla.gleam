@@ -226,7 +226,7 @@ pub fn main() {
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
       }
-      ["homepagegames", encoded_name, encoded_index] -> {
+      ["usergames", encoded_name, encoded_index] -> {
         let index = case int.parse(encoded_index) {
           Ok(i) -> i
           Error(_) -> 0
@@ -235,13 +235,9 @@ pub fn main() {
           Ok(decoded_name) -> decoded_name
           Error(_) -> "Invalid name"
         }
-        io.debug("Retrieving Games For " <> name)
-        io.debug("Index " <> int.to_string(index))
+
         let offset = { index - 1 } * 12
         let limit = 12
-        io.debug(offset)
-        io.debug(limit)
-
         let assert Ok(conn) = sqlight.open("tracker.db")
         let sql =
           "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
@@ -264,20 +260,48 @@ pub fn main() {
             expecting: newgames_row_decoder(),
           )
 
-        io.debug("JOSH GAMES")
-        io.debug(rows)
+        let json = list.map(rows, games_row_encoder)
+        let gamejson = json.preprocessed_array(json)
+        
 
-        // let firstdate = tempo.format_utc(tempo.ISO8601Seconds)
-        // let firstdate = case rows {
-        //   [first, ..] -> {
-        //     io.println("The date of the first game record is: " <> first.date)
-        //     first.date
-        //   }
-        //   [] -> {
-        //     io.println("No game records found")
-        //     ""  // or use an Option type like `None` if you prefer
-        //   }
-        // }
+        json.to_string_tree(gamejson)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["userfollowinggames", encoded_name, encoded_index] -> {
+        let index = case int.parse(encoded_index) {
+          Ok(i) -> i
+          Error(_) -> 0
+        }
+        let name = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let offset = { index - 1 } * 12
+        let limit = 12
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
+          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
+
+        let assert Ok(rows) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.int(limit),
+              sqlight.int(offset),
+            ],
+            expecting: newgames_row_decoder(),
+          )
+
         let firstdate = case index {
           1 -> {
               tempo.format_utc(tempo.ISO8601Seconds)
@@ -289,54 +313,30 @@ pub fn main() {
             }
             [] -> {
               io.println("No game records found")
-              ""  // or use an Option type like `None` if you prefer
+              ""
             }
           }
         }
-
         let lastdate = case list.last(rows) {
           Ok(last) -> {
             last.date
           }
           Error(_) -> {
             io.println("No game records found")
-            ""  // or use an Option type like `None` if you prefer
+            "" 
           }
         }
 
+        // this needs to be changed to instead gets users being followed
         let users = ["john", "thetwinmeister", "ethangambles"]
-        io.debug(users)
-        io.debug(" ")
-        io.debug(" ")
 
         let sql =
           "SELECT * FROM gameRecord WHERE (winnerName = ? OR secondName = ?
           OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ?)
           AND date <= ? AND date >= ? ORDER BY gameID;"
 
-
-
-
-        // io.debug("following_games")
-        // let all_rows = following_games(users, firstdate, lastdate, conn, sql)
-        // io.debug("all_rows")
-        // io.debug(all_rows)
-        // let combinedgames = list.append(all_rows, rows)
-        // let new_rows = combinedgames |> set.from_list |> set.to_list |> list.sort(by: fn(a, b) { int.compare(a.gameid, b.gameid) }) |> list.reverse
-        // io.debug("new_rows")
-        // io.debug(new_rows)
-
-        // let json = list.map(new_rows, games_row_encoder)
-        // let gamejson = json.preprocessed_array(json)
-
-        // between
-        io.debug("following_games")
         let all_rows = following_games(users, firstdate, lastdate, conn, sql)
-        io.debug("all_rows")
-        io.debug(all_rows)
-
         let combinedgames = list.append(all_rows, rows)
-
         let new_rows = 
           combinedgames
           |> list.fold(
@@ -347,18 +347,9 @@ pub fn main() {
           )
           |> dict.values
           |> list.sort(by: fn(a, b) { int.compare(b.gameid, a.gameid) })
-
-        io.debug("new_rows")
-        io.debug(new_rows)
-
         let json = list.map(new_rows, games_row_encoder)
         let gamejson = json.preprocessed_array(json)
-        
-
-        // these
-        io.debug(" ")
-        
-
+      
         json.to_string_tree(gamejson)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
@@ -516,6 +507,14 @@ pub fn main() {
           Error(_) -> "Invalid name"
         }
 
+        let location = case find_location(name) {
+          option.Some(location) -> {
+            location
+          }
+          option.None -> {
+            io.debug("No location found")
+          }
+        }
         let gamesplayed = calc_games_played(name)
         let gameswon = calc_games_won(name)
         let mostplayed = calc_most_played(name)
@@ -527,6 +526,7 @@ pub fn main() {
             #("gameswon", json.int(gameswon)),
             #("mostplayed", json.string(mostplayed)),
             #("mostwon", json.string(mostwon)),
+            #("location", json.string(location)),
           ])
 
         json.to_string_tree(player_stats_json)
@@ -807,14 +807,9 @@ pub fn main() {
             with: [sqlight.int(userid)],
             expecting: follow_decoder(),
           )
-        io.debug("result")
-        io.debug(result)
-        let followers = json.preprocessed_array(result)
-        io.debug("followers")
-        io.debug(followers)
-        json.to_string_tree(followers)
-        io.debug("json.to_string_tree(followers)")
-        io.debug(json.to_string_tree(followers))
+
+        let following = json.preprocessed_array(result)
+        json.to_string_tree(following)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
         |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
@@ -958,6 +953,38 @@ pub fn main() {
     |> mist.port(8000)
     |> mist.start_http
   process.sleep_forever()
+}
+
+pub fn location_decoder() {
+  use location <- decode.field(0, decode.string)
+
+  // let location =
+  //   json.object([
+  //     #("location", json.string(location))
+  //   ])
+
+  // Return the JSON object as the decoded result
+  decode.success(location)
+}
+
+pub fn find_location(name) {
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql =
+    "SELECT location FROM users WHERE username = ?;"
+  let assert Ok(locations) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [
+        sqlight.text(name)
+      ],
+      expecting: location_decoder(),
+    )
+
+  case locations {
+    [location, ..] -> option.Some(location)  // Return the first location
+    [] -> option.None  // Return None if no locations are found
+  }
 }
 
 pub fn calc_games_played(name) {
@@ -1180,7 +1207,7 @@ fn following_games_recursive(
   case users {
     [] -> acc  // Base case: return the accumulated rows
     [head, ..tail] -> {
-      io.debug(head)  // Print the current user
+      io.debug(head)
       
       let assert Ok(rows) =
         sqlight.query(
@@ -1199,45 +1226,12 @@ fn following_games_recursive(
           expecting: newgames_row_decoder(),
         )
       
-      io.debug("gamerows")
-      io.debug(rows)
-      
       // Add the rows to the accumulator and recurse
       let new_acc = list.append(acc, rows)
       following_games_recursive(tail, startdate, enddate, conn, sql, new_acc)
     }
   }
 }
-
-
-// pub fn following_gamesold(users: List(String), startdate, enddate, conn, sql) {
-//   case users {
-//     [] -> Nil  // Base case: empty list, do nothing
-//     [head, ..tail] -> {
-//       io.debug(head)  // Print the first element
-//       let assert Ok(rows) =
-//           sqlight.query(
-//             sql,
-//             on: conn,
-//             with: [
-//               sqlight.text(head),
-//               sqlight.text(head),
-//               sqlight.text(head),
-//               sqlight.text(head),
-//               sqlight.text(head),
-//               sqlight.text(head),
-//               sqlight.text(startdate),
-//               sqlight.text(enddate),
-//             ],
-//             expecting: newgames_row_decoder(),
-//           )
-//        io.debug("gamerows")
-//        io.debug(rows)
-//       following_games(tail, startdate, enddate, conn, sql)
-//     }
-//   }
-// }
-
 
 
 pub type GameRecord {
