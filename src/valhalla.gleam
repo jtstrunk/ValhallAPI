@@ -54,9 +54,12 @@ pub fn follow_decoder() {
 }
 
 pub fn users_decoder() {
-  use username <- decode.field(0, decode.string)
-
-  let rowjson = json.object([#("username", json.string(username))])
+  use id <- decode.field(0, decode.int)
+  use username <- decode.field(1, decode.string)
+  let rowjson = json.object([
+    #("id", json.int(id)),
+    #("username", json.string(username))
+  ])
   decode.success(rowjson)
 }
 
@@ -683,7 +686,7 @@ pub fn main() {
       }
       ["getusers"] -> {
         let assert Ok(conn) = sqlight.open("tracker.db")
-        let sql = "SELECT username FROM users"
+        let sql = "SELECT id, username FROM users"
         let assert Ok(result) =
           sqlight.query(sql, on: conn, with: [], expecting: users_decoder())
 
