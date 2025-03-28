@@ -1,5 +1,6 @@
 import dot_env
 import dot_env/env
+import gleam/dict
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/http
@@ -7,118 +8,34 @@ import gleam/int
 import gleam/io
 import gleam/json
 import gleam/list
-import gleam/dict
 import gleam/option
 import gleam/string_tree
 import gleam/uri
-import tempo
 import mist
 import sqlight
+import tempo
 import tempo/date
 import wisp
 import wisp/wisp_mist
 
-pub fn game_name_decoder() {
-  use gamename <- decode.field(0, decode.string)
-  // let rowjson = json.object([#("gamename", json.string(gamename))])
-  decode.success(gamename)
+pub type GameRecord {
+  GameRecord(
+    gameid: Int,
+    posterid: Int,
+    gamename: String,
+    winnername: String,
+    winnerscore: Int,
+    secondname: String,
+    secondscore: Int,
+    thirdname: option.Option(String),
+    thirdscore: option.Option(Int),
+    fourthname: option.Option(String),
+    fourthscore: option.Option(Int),
+    date: String,
+  )
 }
 
-pub fn follower_decoder() {
-  use follower <- decode.field("follower", decode.int)
-  use following <- decode.field("following", decode.string)
-  decode.success(#(follower, following))
-}
-
-pub fn login_decoder() {
-  use username <- decode.field("username", decode.string)
-  use password <- decode.field("password", decode.string)
-  decode.success(#(username, password))
-}
-
-pub fn userid_decoder() {
-  use id <- decode.field(0, decode.int)
-  decode.success(id)
-}
-
-pub fn username_decoder() {
-  use name <- decode.field(0, decode.string)
-  decode.success(name)
-}
-
-pub fn follow_decoder() {
-  use id <- decode.field(0, decode.int)
-  let name = get_user_name(id)
-  let rowjson = json.object([#("username", json.string(name))])
-  decode.success(rowjson)
-}
-
-pub fn users_decoder() {
-  use id <- decode.field(0, decode.int)
-  use username <- decode.field(1, decode.string)
-  let rowjson = json.object([
-    #("id", json.int(id)),
-    #("username", json.string(username))
-  ])
-  decode.success(rowjson)
-}
-
-pub fn unique_name_decoder() {
-  use name <- decode.field(0, decode.optional(decode.string))
-
-  let namejson =
-    json.object([
-      #("name", name |> option.map(json.string) |> option.unwrap(json.null())),
-    ])
-  decode.success(namejson)
-}
-
-pub fn games_row_decoder() {
-  use gameid <- decode.field(0, decode.int)
-  use posterid <- decode.field(1, decode.int)
-  use gamename <- decode.field(2, decode.string)
-  use winnername <- decode.field(3, decode.string)
-  use winnerscore <- decode.field(4, decode.int)
-  use secondname <- decode.field(5, decode.string)
-  use secondscore <- decode.field(6, decode.int)
-  use thirdname <- decode.field(7, decode.optional(decode.string))
-  use thirdscore <- decode.field(8, decode.optional(decode.int))
-  use fourthname <- decode.field(9, decode.optional(decode.string))
-  use fourthscore <- decode.field(10, decode.optional(decode.int))
-  use date <- decode.field(15, decode.string)
-
-  let rowjson =
-    json.object([
-      #("gameid", json.int(gameid)),
-      #("posterid", json.int(posterid)),
-      #("gamename", json.string(gamename)),
-      #("winnername", json.string(winnername)),
-      #("winnerscore", json.int(winnerscore)),
-      #("secondname", json.string(secondname)),
-      #("secondscore", json.int(secondscore)),
-      #(
-        "thirdname",
-        thirdname |> option.map(json.string) |> option.unwrap(json.null()),
-      ),
-      #(
-        "thirdscore",
-        thirdscore |> option.map(json.int) |> option.unwrap(json.null()),
-      ),
-      #(
-        "fourthname",
-        fourthname |> option.map(json.string) |> option.unwrap(json.null()),
-      ),
-      #(
-        "fourthscore",
-        fourthscore |> option.map(json.int) |> option.unwrap(json.null()),
-      ),
-      #("date", json.string(date)),
-    ])
-
-  // Return the JSON object as the decoded result
-  decode.success(rowjson)
-}
-
+// decoders
 fn insert_decoder() {
   use posterid <- decode.field("posterid", decode.int)
   use gamename <- decode.field("gamename", decode.string)
@@ -181,6 +98,169 @@ fn update_decoder() {
   ))
 }
 
+pub fn games_row_decoder() {
+  use gameid <- decode.field(0, decode.int)
+  use posterid <- decode.field(1, decode.int)
+  use gamename <- decode.field(2, decode.string)
+  use winnername <- decode.field(3, decode.string)
+  use winnerscore <- decode.field(4, decode.int)
+  use secondname <- decode.field(5, decode.string)
+  use secondscore <- decode.field(6, decode.int)
+  use thirdname <- decode.field(7, decode.optional(decode.string))
+  use thirdscore <- decode.field(8, decode.optional(decode.int))
+  use fourthname <- decode.field(9, decode.optional(decode.string))
+  use fourthscore <- decode.field(10, decode.optional(decode.int))
+  use date <- decode.field(15, decode.string)
+
+  decode.success(GameRecord(
+    gameid,
+    posterid,
+    gamename,
+    winnername,
+    winnerscore,
+    secondname,
+    secondscore,
+    thirdname,
+    thirdscore,
+    fourthname,
+    fourthscore,
+    date,
+  ))
+}
+
+pub fn location_decoder() {
+  use location <- decode.field(0, decode.string)
+  decode.success(location)
+}
+
+pub fn game_name_decoder() {
+  use gamename <- decode.field(0, decode.string)
+  decode.success(gamename)
+}
+
+pub fn login_decoder() {
+  use username <- decode.field("username", decode.string)
+  use password <- decode.field("password", decode.string)
+  decode.success(#(username, password))
+}
+
+pub fn userid_decoder() {
+  use id <- decode.field(0, decode.int)
+  decode.success(id)
+}
+
+pub fn follower_decoder() {
+  use follower <- decode.field("follower", decode.int)
+  use following <- decode.field("following", decode.string)
+  decode.success(#(follower, following))
+}
+
+pub fn username_decoder() {
+  use name <- decode.field(0, decode.string)
+  decode.success(name)
+}
+
+// endec
+pub fn games_row_endec() {
+  use gameid <- decode.field(0, decode.int)
+  use posterid <- decode.field(1, decode.int)
+  use gamename <- decode.field(2, decode.string)
+  use winnername <- decode.field(3, decode.string)
+  use winnerscore <- decode.field(4, decode.int)
+  use secondname <- decode.field(5, decode.string)
+  use secondscore <- decode.field(6, decode.int)
+  use thirdname <- decode.field(7, decode.optional(decode.string))
+  use thirdscore <- decode.field(8, decode.optional(decode.int))
+  use fourthname <- decode.field(9, decode.optional(decode.string))
+  use fourthscore <- decode.field(10, decode.optional(decode.int))
+  use date <- decode.field(15, decode.string)
+
+  let rowjson =
+    json.object([
+      #("gameid", json.int(gameid)),
+      #("posterid", json.int(posterid)),
+      #("gamename", json.string(gamename)),
+      #("winnername", json.string(winnername)),
+      #("winnerscore", json.int(winnerscore)),
+      #("secondname", json.string(secondname)),
+      #("secondscore", json.int(secondscore)),
+      #(
+        "thirdname",
+        thirdname |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "thirdscore",
+        thirdscore |> option.map(json.int) |> option.unwrap(json.null()),
+      ),
+      #(
+        "fourthname",
+        fourthname |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "fourthscore",
+        fourthscore |> option.map(json.int) |> option.unwrap(json.null()),
+      ),
+      #("date", json.string(date)),
+    ])
+
+  decode.success(rowjson)
+}
+
+pub fn unique_name_endec() {
+  use name <- decode.field(0, decode.optional(decode.string))
+
+  let namejson =
+    json.object([
+      #("name", name |> option.map(json.string) |> option.unwrap(json.null())),
+    ])
+  decode.success(namejson)
+}
+
+pub fn users_endec() {
+  use id <- decode.field(0, decode.int)
+  use username <- decode.field(1, decode.string)
+  let rowjson =
+    json.object([#("id", json.int(id)), #("username", json.string(username))])
+  decode.success(rowjson)
+}
+
+pub fn follow_endec() {
+  use id <- decode.field(0, decode.int)
+  let name = get_user_name(id)
+  let rowjson = json.object([#("username", json.string(name))])
+  decode.success(rowjson)
+}
+
+// encoders
+pub fn games_row_encoder(record: GameRecord) -> json.Json {
+  json.object([
+    #("gameid", json.int(record.gameid)),
+    #("posterid", json.int(record.posterid)),
+    #("gamename", json.string(record.gamename)),
+    #("winnername", json.string(record.winnername)),
+    #("winnerscore", json.int(record.winnerscore)),
+    #("secondname", json.string(record.secondname)),
+    #("secondscore", json.int(record.secondscore)),
+    #(
+      "thirdname",
+      record.thirdname |> option.map(json.string) |> option.unwrap(json.null()),
+    ),
+    #(
+      "thirdscore",
+      record.thirdscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
+    #(
+      "fourthname",
+      record.fourthname |> option.map(json.string) |> option.unwrap(json.null()),
+    ),
+    #(
+      "fourthscore",
+      record.fourthscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
+    #("date", json.string(record.date)),
+  ])
+}
+
 pub fn main() {
   wisp.configure_logger()
 
@@ -196,168 +276,7 @@ pub fn main() {
       [] -> {
         wisp.html_response(string_tree.from_string("Hello"), 200)
       }
-      ["showgames", encoded_name] -> {
-        let name = case uri.percent_decode(encoded_name) {
-          Ok(decoded_name) -> decoded_name
-          Error(_) -> "Invalid name"
-        }
-        io.debug("Retrieving Games For " <> name)
-
-        let assert Ok(conn) = sqlight.open("tracker.db")
-        let sql =
-          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC;"
-
-        let assert Ok(rows) =
-          sqlight.query(
-            sql,
-            on: conn,
-            with: [
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-            ],
-            expecting: games_row_decoder(),
-          )
-        let gamerows = json.preprocessed_array(rows)
-        // wisp.json_response(json.to_string_tree(gamerows), 200)
-
-        json.to_string_tree(gamerows)
-        |> wisp.json_response(200)
-        |> wisp.set_header("access-control-allow-origin", "*")
-      }
-      ["usergames", encoded_name, encoded_index] -> {
-        let index = case int.parse(encoded_index) {
-          Ok(i) -> i
-          Error(_) -> 0
-        }
-        let name = case uri.percent_decode(encoded_name) {
-          Ok(decoded_name) -> decoded_name
-          Error(_) -> "Invalid name"
-        }
-
-        let offset = { index - 1 } * 12
-        let limit = 12
-        let assert Ok(conn) = sqlight.open("tracker.db")
-        let sql =
-          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
-
-        let assert Ok(rows) =
-          sqlight.query(
-            sql,
-            on: conn,
-            with: [
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.int(limit),
-              sqlight.int(offset),
-            ],
-            expecting: newgames_row_decoder(),
-          )
-
-        let json = list.map(rows, games_row_encoder)
-        let gamejson = json.preprocessed_array(json)
-        
-
-        json.to_string_tree(gamejson)
-        |> wisp.json_response(200)
-        |> wisp.set_header("access-control-allow-origin", "*")
-      }
-      ["userfollowinggames", encoded_name, encoded_index] -> {
-        let index = case int.parse(encoded_index) {
-          Ok(i) -> i
-          Error(_) -> 0
-        }
-        let name = case uri.percent_decode(encoded_name) {
-          Ok(decoded_name) -> decoded_name
-          Error(_) -> "Invalid name"
-        }
-
-        let offset = { index - 1 } * 12
-        let limit = 12
-        let assert Ok(conn) = sqlight.open("tracker.db")
-        let sql =
-          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
-
-        let assert Ok(rows) =
-          sqlight.query(
-            sql,
-            on: conn,
-            with: [
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.text(name),
-              sqlight.int(limit),
-              sqlight.int(offset),
-            ],
-            expecting: newgames_row_decoder(),
-          )
-
-        let firstdate = case index {
-          1 -> {
-              tempo.format_utc(tempo.ISO8601Seconds)
-            }
-          _ -> case rows {
-            [first, ..] -> {
-              io.println("The date of the first game record is: " <> first.date)
-              first.date
-            }
-            [] -> {
-              io.println("No game records found")
-              ""
-            }
-          }
-        }
-        let lastdate = case list.last(rows) {
-          Ok(last) -> {
-            last.date
-          }
-          Error(_) -> {
-            io.println("No game records found")
-            "" 
-          }
-        }
-
-        // this needs to be changed to instead gets users being followed
-        let users = ["john", "thetwinmeister", "ethangambles"]
-
-        let sql =
-          "SELECT * FROM gameRecord WHERE (winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ?)
-          AND date <= ? AND date >= ? ORDER BY gameID;"
-
-        let all_rows = following_games(users, firstdate, lastdate, conn, sql)
-        let combinedgames = list.append(all_rows, rows)
-        let new_rows = 
-          combinedgames
-          |> list.fold(
-            dict.new(),
-            fn(acc, game) {
-              dict.insert(acc, game.gameid, game)
-            }
-          )
-          |> dict.values
-          |> list.sort(by: fn(a, b) { int.compare(b.gameid, a.gameid) })
-        let json = list.map(new_rows, games_row_encoder)
-        let gamejson = json.preprocessed_array(json)
-      
-        json.to_string_tree(gamejson)
-        |> wisp.json_response(200)
-        |> wisp.set_header("access-control-allow-origin", "*")
-      }
-      ["insertgame"] ->
+      ["insertgame"] -> {
         case req.method {
           http.Options -> {
             wisp.ok()
@@ -441,6 +360,7 @@ pub fn main() {
           }
           _ -> wisp.method_not_allowed([http.Options, http.Post])
         }
+      }
       ["updategame"] -> {
         case req.method {
           http.Options -> {
@@ -504,6 +424,166 @@ pub fn main() {
           _ -> wisp.method_not_allowed([http.Options, http.Post])
         }
       }
+      ["showgames", encoded_name] -> {
+        let name = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+        io.debug("Retrieving Games For " <> name)
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
+          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC;"
+
+        let assert Ok(rows) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+            ],
+            expecting: games_row_endec(),
+          )
+        let gamerows = json.preprocessed_array(rows)
+        // wisp.json_response(json.to_string_tree(gamerows), 200)
+
+        json.to_string_tree(gamerows)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["usergames", encoded_name, encoded_index] -> {
+        let index = case int.parse(encoded_index) {
+          Ok(i) -> i
+          Error(_) -> 0
+        }
+        let name = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let offset = { index - 1 } * 12
+        let limit = 12
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
+          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
+
+        let assert Ok(rows) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.int(limit),
+              sqlight.int(offset),
+            ],
+            expecting: games_row_decoder(),
+          )
+
+        let json = list.map(rows, games_row_encoder)
+        let gamejson = json.preprocessed_array(json)
+
+        json.to_string_tree(gamejson)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["userfollowinggames", encoded_name, encoded_index] -> {
+        let index = case int.parse(encoded_index) {
+          Ok(i) -> i
+          Error(_) -> 0
+        }
+        let name = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let offset = { index - 1 } * 12
+        let limit = 12
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
+          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
+
+        let assert Ok(rows) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.text(name),
+              sqlight.int(limit),
+              sqlight.int(offset),
+            ],
+            expecting: games_row_decoder(),
+          )
+
+        let firstdate = case index {
+          1 -> {
+            tempo.format_utc(tempo.ISO8601Seconds)
+          }
+          _ ->
+            case rows {
+              [first, ..] -> {
+                io.println(
+                  "The date of the first game record is: " <> first.date,
+                )
+                first.date
+              }
+              [] -> {
+                io.println("No game records found")
+                ""
+              }
+            }
+        }
+        let lastdate = case list.last(rows) {
+          Ok(last) -> {
+            last.date
+          }
+          Error(_) -> {
+            io.println("No game records found")
+            ""
+          }
+        }
+
+        // this needs to be changed to instead gets users being followed
+        let users = ["john", "thetwinmeister", "ethangambles"]
+
+        let sql =
+          "SELECT * FROM gameRecord WHERE (winnerName = ? OR secondName = ?
+          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ?)
+          AND date <= ? AND date >= ? ORDER BY gameID;"
+
+        let all_rows = following_games(users, firstdate, lastdate, conn, sql)
+        let combinedgames = list.append(all_rows, rows)
+        let new_rows =
+          combinedgames
+          |> list.fold(dict.new(), fn(acc, game) {
+            dict.insert(acc, game.gameid, game)
+          })
+          |> dict.values
+          |> list.sort(by: fn(a, b) { int.compare(b.gameid, a.gameid) })
+        let json = list.map(new_rows, games_row_encoder)
+        let gamejson = json.preprocessed_array(json)
+
+        json.to_string_tree(gamejson)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+      }
       ["getuserstats", encoded_name] -> {
         let name = case uri.percent_decode(encoded_name) {
           Ok(decoded_name) -> decoded_name
@@ -546,6 +626,17 @@ pub fn main() {
         let name_rows = json.preprocessed_array(unique_names)
 
         json.to_string_tree(name_rows)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["getusers"] -> {
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql = "SELECT id, username FROM users"
+        let assert Ok(result) =
+          sqlight.query(sql, on: conn, with: [], expecting: users_endec())
+
+        let usernamerows = json.preprocessed_array(result)
+        json.to_string_tree(usernamerows)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
       }
@@ -684,17 +775,6 @@ pub fn main() {
           }
         }
       }
-      ["getusers"] -> {
-        let assert Ok(conn) = sqlight.open("tracker.db")
-        let sql = "SELECT id, username FROM users"
-        let assert Ok(result) =
-          sqlight.query(sql, on: conn, with: [], expecting: users_decoder())
-
-        let usernamerows = json.preprocessed_array(result)
-        json.to_string_tree(usernamerows)
-        |> wisp.json_response(200)
-        |> wisp.set_header("access-control-allow-origin", "*")
-      }
       ["getuserelationship"] -> {
         case req.method {
           http.Options -> {
@@ -733,7 +813,9 @@ pub fn main() {
             case relationshipexistence {
               0 -> {
                 let followed_user_json =
-                  json.object([#("relationship", json.string("Not Following User"))])
+                  json.object([
+                    #("relationship", json.string("Not Following User")),
+                  ])
 
                 json.to_string_tree(followed_user_json)
                 |> wisp.json_response(200)
@@ -784,7 +866,7 @@ pub fn main() {
             sql,
             on: conn,
             with: [sqlight.int(userid)],
-            expecting: follow_decoder(),
+            expecting: follow_endec(),
           )
 
         let followers = json.preprocessed_array(result)
@@ -808,7 +890,7 @@ pub fn main() {
             sql,
             on: conn,
             with: [sqlight.int(userid)],
-            expecting: follow_decoder(),
+            expecting: follow_endec(),
           )
 
         let following = json.preprocessed_array(result)
@@ -958,35 +1040,20 @@ pub fn main() {
   process.sleep_forever()
 }
 
-pub fn location_decoder() {
-  use location <- decode.field(0, decode.string)
-
-  // let location =
-  //   json.object([
-  //     #("location", json.string(location))
-  //   ])
-
-  // Return the JSON object as the decoded result
-  decode.success(location)
-}
-
 pub fn find_location(name) {
   let assert Ok(conn) = sqlight.open("tracker.db")
-  let sql =
-    "SELECT location FROM users WHERE username = ?;"
+  let sql = "SELECT location FROM users WHERE username = ?;"
   let assert Ok(locations) =
     sqlight.query(
       sql,
       on: conn,
-      with: [
-        sqlight.text(name)
-      ],
+      with: [sqlight.text(name)],
       expecting: location_decoder(),
     )
 
   case locations {
-    [location, ..] -> option.Some(location)  // Return the first location
-    [] -> option.None  // Return None if no locations are found
+    [location, ..] -> option.Some(location)
+    [] -> option.None
   }
 }
 
@@ -1007,7 +1074,7 @@ pub fn calc_games_played(name) {
         sqlight.text(name),
         sqlight.text(name),
       ],
-      expecting: games_row_decoder(),
+      expecting: games_row_endec(),
     )
 
   let gamesplayed = list.length(rows)
@@ -1022,7 +1089,7 @@ pub fn calc_games_won(name) {
       sql,
       on: conn,
       with: [sqlight.text(name)],
-      expecting: games_row_decoder(),
+      expecting: games_row_endec(),
     )
 
   let gameswon = list.length(rows)
@@ -1151,7 +1218,7 @@ pub fn find_unique_names(name) {
         sqlight.text(name),
         sqlight.text(name),
       ],
-      expecting: unique_name_decoder(),
+      expecting: unique_name_endec(),
     )
   unique_names
 }
@@ -1195,7 +1262,13 @@ pub fn get_user_name(userid: Int) {
   }
 }
 
-pub fn following_games(users: List(String), startdate, enddate, conn, sql) -> List(GameRecord) {
+pub fn following_games(
+  users: List(String),
+  startdate,
+  enddate,
+  conn,
+  sql,
+) -> List(GameRecord) {
   following_games_recursive(users, startdate, enddate, conn, sql, [])
 }
 
@@ -1208,10 +1281,11 @@ fn following_games_recursive(
   acc: List(GameRecord),
 ) -> List(GameRecord) {
   case users {
-    [] -> acc  // Base case: return the accumulated rows
+    [] -> acc
+    // Base case: return the accumulated rows
     [head, ..tail] -> {
       io.debug(head)
-      
+
       let assert Ok(rows) =
         sqlight.query(
           sql,
@@ -1226,91 +1300,12 @@ fn following_games_recursive(
             sqlight.text(startdate),
             sqlight.text(enddate),
           ],
-          expecting: newgames_row_decoder(),
+          expecting: games_row_decoder(),
         )
-      
+
       // Add the rows to the accumulator and recurse
       let new_acc = list.append(acc, rows)
       following_games_recursive(tail, startdate, enddate, conn, sql, new_acc)
     }
   }
 }
-
-
-pub type GameRecord {
-  GameRecord(
-    gameid: Int,
-    posterid: Int,
-    gamename: String,
-    winnername: String,
-    winnerscore: Int,
-    secondname: String,
-    secondscore: Int,
-    thirdname: option.Option(String),
-    thirdscore: option.Option(Int),
-    fourthname: option.Option(String),
-    fourthscore: option.Option(Int),
-    date: String
-  )
-}
-
-pub fn newgames_row_decoder() {
-  use gameid <- decode.field(0, decode.int)
-  use posterid <- decode.field(1, decode.int)
-  use gamename <- decode.field(2, decode.string)
-  use winnername <- decode.field(3, decode.string)
-  use winnerscore <- decode.field(4, decode.int)
-  use secondname <- decode.field(5, decode.string)
-  use secondscore <- decode.field(6, decode.int)
-  use thirdname <- decode.field(7, decode.optional(decode.string))
-  use thirdscore <- decode.field(8, decode.optional(decode.int))
-  use fourthname <- decode.field(9, decode.optional(decode.string))
-  use fourthscore <- decode.field(10, decode.optional(decode.int))
-  use date <- decode.field(15, decode.string)
-
-  decode.success(GameRecord(
-    gameid,
-    posterid,
-    gamename,
-    winnername,
-    winnerscore,
-    secondname,
-    secondscore,
-    thirdname,
-    thirdscore,
-    fourthname,
-    fourthscore,
-    date
-  ))
-}
-
-pub fn games_row_encoder(record: GameRecord) -> json.Json {
-  json.object([
-    #("gameid", json.int(record.gameid)),
-    #("posterid", json.int(record.posterid)),
-    #("gamename", json.string(record.gamename)),
-    #("winnername", json.string(record.winnername)),
-    #("winnerscore", json.int(record.winnerscore)),
-    #("secondname", json.string(record.secondname)),
-    #("secondscore", json.int(record.secondscore)),
-    #(
-      "thirdname",
-      record.thirdname |> option.map(json.string) |> option.unwrap(json.null()),
-    ),
-    #(
-      "thirdscore",
-      record.thirdscore |> option.map(json.int) |> option.unwrap(json.null()),
-    ),
-    #(
-      "fourthname",
-      record.fourthname |> option.map(json.string) |> option.unwrap(json.null()),
-    ),
-    #(
-      "fourthscore",
-      record.fourthscore |> option.map(json.int) |> option.unwrap(json.null()),
-    ),
-    #("date", json.string(record.date)),
-  ])
-}
-
-// how can I add an accumulator that adds all of them together?
