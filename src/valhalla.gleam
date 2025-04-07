@@ -49,6 +49,8 @@ fn insert_decoder() {
   use fourthscore <- decode.field("fourthscore", decode.optional(decode.int))
   use fifthname <- decode.field("fifthname", decode.optional(decode.string))
   use fifthscore <- decode.field("fifthscore", decode.optional(decode.int))
+  use sixthname <- decode.field("sixthname", decode.optional(decode.string))
+  use sixthscore <- decode.field("sixthscore", decode.optional(decode.int))
   use date <- decode.field("date", decode.optional(decode.string))
 
   decode.success(#(
@@ -64,6 +66,8 @@ fn insert_decoder() {
     fourthscore,
     fifthname,
     fifthscore,
+    sixthname,
+    sixthscore,
     date,
   ))
 }
@@ -80,6 +84,8 @@ fn update_decoder() {
   use fourthscore <- decode.field("fourthscore", decode.optional(decode.int))
   use fifthname <- decode.field("fifthname", decode.optional(decode.string))
   use fifthscore <- decode.field("fifthscore", decode.optional(decode.int))
+  use sixthname <- decode.field("sixthname", decode.optional(decode.string))
+  use sixthscore <- decode.field("sixthscore", decode.optional(decode.int))
   use date <- decode.field("date", decode.string)
 
   decode.success(#(
@@ -94,6 +100,8 @@ fn update_decoder() {
     fourthscore,
     fifthname,
     fifthscore,
+    sixthname,
+    sixthscore,
     date,
   ))
 }
@@ -300,6 +308,8 @@ pub fn main() {
               fourthscore,
               fifthname,
               fifthscore,
+              sixthname,
+              sixthscore,
               date,
             )) = decode.run(json_result, insert_decoder())
 
@@ -323,8 +333,8 @@ pub fn main() {
             }
 
             let sql =
-              "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, sixthName, sixthScore, date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
             let _ =
               io.debug(
@@ -342,6 +352,8 @@ pub fn main() {
                   sqlight.nullable(sqlight.int, fourthscore),
                   sqlight.nullable(sqlight.text, fifthname),
                   sqlight.nullable(sqlight.int, fifthscore),
+                  sqlight.nullable(sqlight.text, sixthname),
+                  sqlight.nullable(sqlight.int, sixthscore),
                   sqlight.text(gamedate),
                 ]),
               )
@@ -385,12 +397,14 @@ pub fn main() {
               fourthscore,
               fifthname,
               fifthscore,
+              sixthname,
+              sixthscore,
               date,
             )) = decode.run(json_result, update_decoder())
 
             let assert Ok(conn) = sqlight.open("tracker.db")
             let sql =
-              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, date = ? WHERE gameID = ?"
+              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, sixthname = ?, sixthscore = ?, date = ? WHERE gameID = ?"
 
             let _ =
               io.debug(
@@ -405,6 +419,8 @@ pub fn main() {
                   sqlight.nullable(sqlight.int, fourthscore),
                   sqlight.nullable(sqlight.text, fifthname),
                   sqlight.nullable(sqlight.int, fifthscore),
+                  sqlight.nullable(sqlight.text, sixthname),
+                  sqlight.nullable(sqlight.int, sixthscore),
                   sqlight.text(date),
                   sqlight.int(gameid),
                 ]),
