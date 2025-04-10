@@ -31,6 +31,10 @@ pub type GameRecord {
     thirdscore: option.Option(Int),
     fourthname: option.Option(String),
     fourthscore: option.Option(Int),
+    fifthname: option.Option(String),
+    fifthscore: option.Option(Int),
+    sixthname: option.Option(String),
+    sixthscore: option.Option(Int),
     date: String,
   )
 }
@@ -118,6 +122,10 @@ pub fn games_row_decoder() {
   use thirdscore <- decode.field(8, decode.optional(decode.int))
   use fourthname <- decode.field(9, decode.optional(decode.string))
   use fourthscore <- decode.field(10, decode.optional(decode.int))
+  use fifthname <- decode.field(11, decode.optional(decode.string))
+  use fifthscore <- decode.field(12, decode.optional(decode.int))
+  use sixthname <- decode.field(13, decode.optional(decode.string))
+  use sixthscore <- decode.field(14, decode.optional(decode.int))
   use date <- decode.field(15, decode.string)
 
   decode.success(GameRecord(
@@ -132,6 +140,10 @@ pub fn games_row_decoder() {
     thirdscore,
     fourthname,
     fourthscore,
+    fifthname,
+    fifthscore,
+    sixthname,
+    sixthscore,
     date,
   ))
 }
@@ -181,6 +193,10 @@ pub fn games_row_endec() {
   use thirdscore <- decode.field(8, decode.optional(decode.int))
   use fourthname <- decode.field(9, decode.optional(decode.string))
   use fourthscore <- decode.field(10, decode.optional(decode.int))
+  use fifthname <- decode.field(11, decode.optional(decode.string))
+  use fifthscore <- decode.field(12, decode.optional(decode.int))
+  use sixthname <- decode.field(13, decode.optional(decode.string))
+  use sixthscore <- decode.field(14, decode.optional(decode.int))
   use date <- decode.field(15, decode.string)
 
   let rowjson =
@@ -207,6 +223,22 @@ pub fn games_row_endec() {
       #(
         "fourthscore",
         fourthscore |> option.map(json.int) |> option.unwrap(json.null()),
+      ),
+      #(
+        "fifthname",
+        fifthname |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "fifthscore",
+        fifthscore |> option.map(json.int) |> option.unwrap(json.null()),
+      ),
+      #(
+        "sixthname",
+        sixthname |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "sixthscore",
+        sixthscore |> option.map(json.int) |> option.unwrap(json.null()),
       ),
       #("date", json.string(date)),
     ])
@@ -264,6 +296,22 @@ pub fn games_row_encoder(record: GameRecord) -> json.Json {
     #(
       "fourthscore",
       record.fourthscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
+    #(
+      "fifthname",
+      record.fifthname |> option.map(json.string) |> option.unwrap(json.null()),
+    ),
+    #(
+      "fifthscore",
+      record.fifthscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
+    #(
+      "sixthname",
+      record.sixthname |> option.map(json.string) |> option.unwrap(json.null()),
+    ),
+    #(
+      "sixthscore",
+      record.sixthscore |> option.map(json.int) |> option.unwrap(json.null()),
     ),
     #("date", json.string(record.date)),
   ])
@@ -506,7 +554,7 @@ pub fn main() {
             ],
             expecting: games_row_decoder(),
           )
-
+        // here
         let json = list.map(rows, games_row_encoder)
         let gamejson = json.preprocessed_array(json)
 
