@@ -1,0 +1,13 @@
+[Unit]
+Description=Valhalla API
+
+[Service]
+WorkingDirectory=/home/joshua/gleamProjects/valhalla
+User=joshua
+ExecStart=/home/linuxbrew/.linuxbrew/bin/gleam run
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/joshua/.local/bin
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

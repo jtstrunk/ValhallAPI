@@ -431,8 +431,6 @@ pub fn main() {
           }
           http.Post -> {
             use json_result <- wisp.require_json(req)
-            io.debug("updating Game")
-            io.debug(json_result)
             let assert Ok(#(
               gameid,
               winnername,
@@ -1099,7 +1097,7 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    |> mist.port(8000)
+    |> mist.port(6220)
     |> mist.start_http
   process.sleep_forever()
 }
@@ -1348,8 +1346,6 @@ fn following_games_recursive(
     [] -> acc
     // Base case: return the accumulated rows
     [head, ..tail] -> {
-      io.debug(head)
-
       let assert Ok(rows) =
         sqlight.query(
           sql,
