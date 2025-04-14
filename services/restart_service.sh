@@ -1,0 +1,2 @@
+sudo systemctl restart valhalla_api
+sudo systemctl status valhalla_api
