@@ -622,8 +622,24 @@ pub fn main() {
           }
         }
 
-        // this needs to be changed to instead gets users being followed
-        let users = ["john", "thetwinmeister", "ethangambles"]
+        let sql = "select id from users where username = ?;"
+        let assert Ok([userid]) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.text(name)],
+            expecting: userid_decoder(),
+          )
+
+        let sql =
+          "select distinct users.username from users RIGHT JOIN following ON users.id = following.follower where following = ?;"
+        let assert Ok(users) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(userid)],
+            expecting: username_decoder(),
+          )
 
         let sql =
           "SELECT * FROM gameRecord WHERE (winnerName = ? OR secondName = ?
