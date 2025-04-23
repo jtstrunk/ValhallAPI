@@ -39,6 +39,10 @@ pub type GameRecord {
   )
 }
 
+pub type CustomListRow {
+  CustomListRow(id: Int, cardname: String, list: String)
+}
+
 // decoders
 fn insert_decoder() {
   use posterid <- decode.field("posterid", decode.int)
@@ -180,6 +184,21 @@ pub fn username_decoder() {
   decode.success(name)
 }
 
+pub fn customlist_decoder() {
+  use id <- decode.field(0, decode.int)
+  use cardname <- decode.field(1, decode.string)
+  use list <- decode.field(2, decode.string)
+
+  decode.success(CustomListRow(id, cardname, list))
+}
+
+pub fn customlist_tuple_decoder() {
+  use id <- decode.field("id", decode.int)
+  use cardname <- decode.field("cardname", decode.string)
+  use list <- decode.field("list", decode.string)
+  decode.success(#(id, cardname, list))
+}
+
 // endec
 pub fn games_row_endec() {
   use gameid <- decode.field(0, decode.int)
@@ -314,6 +333,14 @@ pub fn games_row_encoder(record: GameRecord) -> json.Json {
       record.sixthscore |> option.map(json.int) |> option.unwrap(json.null()),
     ),
     #("date", json.string(record.date)),
+  ])
+}
+
+pub fn customlist_encoder(row: CustomListRow) -> json.Json {
+  json.object([
+    #("id", json.int(row.id)),
+    #("cardname", json.string(row.cardname)),
+    #("list", json.string(row.list)),
   ])
 }
 
@@ -1093,6 +1120,124 @@ pub fn main() {
 
             let followed_user_json =
               json.object([#("event", json.string("Unfollowed User"))])
+
+            json.to_string_tree(followed_user_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
+      ["getusercustomlists", encoded_name] -> {
+        let name = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let userid = get_user_id(name)
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT id, cardName, listName FROM dominionCustomLists WHERE id = ?"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(userid)],
+            expecting: customlist_decoder(),
+          )
+
+        let json_list = list.map(result, customlist_encoder)
+        let json_array = json.preprocessed_array(json_list)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
+      ["addtocustomlist"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(id, cardname, list)) =
+              decode.run(json_result, customlist_tuple_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql = "INSERT INTO dominionCustomLists VALUES (?, ?, ?);"
+            let assert Ok(_result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [
+                  sqlight.int(id),
+                  sqlight.text(cardname),
+                  sqlight.text(list),
+                ],
+                expecting: customlist_decoder(),
+              )
+
+            let followed_user_json =
+              json.object([#("event", json.string("Added Card to Custom List"))])
+
+            json.to_string_tree(followed_user_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
+      ["removefromcustomlist"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(id, cardname, list)) =
+              decode.run(json_result, customlist_tuple_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "DELETE FROM dominionCustomLists WHERE id = ? AND cardName = ? AND listName = ?;"
+            let assert Ok(_result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [
+                  sqlight.int(id),
+                  sqlight.text(cardname),
+                  sqlight.text(list),
+                ],
+                expecting: customlist_decoder(),
+              )
+
+            let followed_user_json =
+              json.object([
+                #("event", json.string("Removed Card from Custom List")),
+              ])
 
             json.to_string_tree(followed_user_json)
             |> wisp.json_response(200)
