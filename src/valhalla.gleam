@@ -659,7 +659,7 @@ pub fn main() {
           )
 
         let sql =
-          "select distinct users.username from users RIGHT JOIN following ON users.id = following.follower where following = ?;"
+          "select distinct users.username from users RIGHT JOIN following ON users.id = following.following where follower = ?;"
         let assert Ok(users) =
           sqlight.query(
             sql,
@@ -825,7 +825,7 @@ pub fn main() {
               decode.run(json_result, login_decoder())
 
             let assert Ok(conn) = sqlight.open("tracker.db")
-            let sql = "INSERT INTO users (username, password) VALUES (?, ?)"
+            let sql = "INSERT INTO users (username, password, location) VALUES (?, ?, 'None')"
 
             let assert Ok(_insert) =
               sqlight.query(
