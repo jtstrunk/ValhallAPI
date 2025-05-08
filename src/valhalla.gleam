@@ -43,6 +43,28 @@ pub type CustomListRow {
   CustomListRow(id: Int, cardname: String, list: String)
 }
 
+pub type CurrentUserGameInformation {
+  CurrentUserGameInformation(win_count: Int, total_games: Int)
+}
+
+pub type WinPercent {
+  WinPercent(name: String, win_count: Int, total_games: Int, win_percent: Float)
+}
+
+pub type WinCount {
+  WinCount(name: String, win_count: Int)
+}
+
+pub type GameStats {
+  GameStats(
+    gameplaycount: Int,
+    playercount: Int,
+    userinformation: List(CurrentUserGameInformation),
+    winpercent: List(WinPercent),
+    wincount: List(WinCount),
+  )
+}
+
 // decoders
 fn insert_decoder() {
   use posterid <- decode.field("posterid", decode.int)
@@ -199,6 +221,36 @@ pub fn customlist_tuple_decoder() {
   decode.success(#(id, cardname, list))
 }
 
+pub fn currentuser_stats_decoder() {
+  use wins <- decode.field(0, decode.int)
+  use plays <- decode.field(1, decode.int)
+  decode.success(CurrentUserGameInformation(win_count: wins, total_games: plays))
+}
+
+pub fn gameuniqueplayers_decoder() {
+  use count <- decode.field(0, decode.int)
+  decode.success(count)
+}
+
+fn user_stat_decoder() {
+  use name <- decode.field(0, decode.string)
+  use win_count <- decode.field(1, decode.int)
+  use total_games <- decode.field(2, decode.int)
+  use win_percent <- decode.field(3, decode.float)
+  decode.success(WinPercent(
+    name: name,
+    win_count: win_count,
+    total_games: total_games,
+    win_percent: win_percent,
+  ))
+}
+
+fn win_count_decoder() {
+  use name <- decode.field(0, decode.string)
+  use win_count <- decode.field(1, decode.int)
+  decode.success(WinCount(name: name, win_count: win_count))
+}
+
 // endec
 pub fn games_row_endec() {
   use gameid <- decode.field(0, decode.int)
@@ -341,6 +393,42 @@ pub fn customlist_encoder(row: CustomListRow) -> json.Json {
     #("id", json.int(row.id)),
     #("cardname", json.string(row.cardname)),
     #("list", json.string(row.list)),
+  ])
+}
+
+pub fn current_user_encoder(stat: CurrentUserGameInformation) -> json.Json {
+  json.object([
+    #("wins", json.int(stat.win_count)),
+    #("plays", json.int(stat.total_games)),
+  ])
+}
+
+pub fn user_stat_encoder(stat: WinPercent) -> json.Json {
+  json.object([
+    #("name", json.string(stat.name)),
+    #("win_count", json.int(stat.win_count)),
+    #("total_games", json.int(stat.total_games)),
+    #("win_percent", json.float(stat.win_percent)),
+  ])
+}
+
+pub fn win_count_encoder(stat: WinCount) -> json.Json {
+  json.object([
+    #("name", json.string(stat.name)),
+    #("win_count", json.int(stat.win_count)),
+  ])
+}
+
+pub fn game_stats_encoder(stats: GameStats) -> json.Json {
+  json.object([
+    #("gameplaycount", json.int(stats.gameplaycount)),
+    #("playercount", json.int(stats.playercount)),
+    #(
+      "userinformation",
+      json.array(stats.userinformation, of: current_user_encoder),
+    ),
+    #("winpercent", json.array(stats.winpercent, of: user_stat_encoder)),
+    #("wincounts", json.array(stats.wincount, of: win_count_encoder)),
   ])
 }
 
@@ -825,7 +913,8 @@ pub fn main() {
               decode.run(json_result, login_decoder())
 
             let assert Ok(conn) = sqlight.open("tracker.db")
-            let sql = "INSERT INTO users (username, password, location) VALUES (?, ?, 'None')"
+            let sql =
+              "INSERT INTO users (username, password, location) VALUES (?, ?, 'None')"
 
             let assert Ok(_insert) =
               sqlight.query(
@@ -1250,6 +1339,38 @@ pub fn main() {
           }
         }
       }
+      ["getgameinformation", encoded_user, encoded_name] -> {
+        let user = case uri.percent_decode(encoded_user) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let gamename = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let currentuserinformation =
+          get_currentuser_game_information(user, gamename)
+        let playcount = get_game_play_count(gamename)
+        let playercount = get_unique_name_count(gamename)
+        let winpercent = get_highest_win_percentage(gamename)
+        let wincount = get_win_count(gamename)
+        let result =
+          GameStats(
+            gameplaycount: playcount,
+            playercount: playercount,
+            userinformation: currentuserinformation,
+            winpercent: winpercent,
+            wincount: wincount,
+          )
+
+        game_stats_encoder(result)
+        |> json.to_string_tree
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+      }
+
       _ -> wisp.not_found()
     }
   }
@@ -1530,4 +1651,151 @@ fn following_games_recursive(
       following_games_recursive(tail, startdate, enddate, conn, sql, new_acc)
     }
   }
+}
+
+pub fn get_currentuser_game_information(username: String, gamename: String) {
+  io.debug(username)
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql =
+    "SELECT
+      SUM(CASE WHEN winnerName = ? THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN winnerName = ? THEN 1 ELSE 0 END) +
+      SUM(CASE WHEN secondName = ? THEN 1 ELSE 0 END) +
+      SUM(CASE WHEN thirdName = ? THEN 1 ELSE 0 END) +
+      SUM(CASE WHEN fourthName = ? THEN 1 ELSE 0 END) +
+      SUM(CASE WHEN fifthName = ? THEN 1 ELSE 0 END) +
+      SUM(CASE WHEN sixthName = ? THEN 1 ELSE 0 END) AS total_appearances
+    FROM gameRecord WHERE gamename = ?;"
+
+  let assert Ok(row) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [
+        sqlight.text(username),
+        sqlight.text(username),
+        sqlight.text(username),
+        sqlight.text(username),
+        sqlight.text(username),
+        sqlight.text(username),
+        sqlight.text(username),
+        sqlight.text(gamename),
+      ],
+      expecting: currentuser_stats_decoder(),
+    )
+  row
+}
+
+pub fn get_game_play_count(gamename: String) {
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql = "SELECT COUNT(*) AS playCount FROM gameRecord WHERE gamename = ?;"
+
+  let assert Ok([row]) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [sqlight.text(gamename)],
+      expecting: gameuniqueplayers_decoder(),
+    )
+  row
+}
+
+pub fn get_unique_name_count(gamename: String) {
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql =
+    "SELECT COUNT(*) AS uniquePlayerCount FROM (
+        SELECT winnerName AS name FROM gameRecord WHERE gamename = ? AND winnerName IS NOT NULL
+      UNION
+        SELECT secondName FROM gameRecord WHERE gamename = ? AND secondName IS NOT NULL
+      UNION
+        SELECT thirdName FROM gameRecord WHERE gamename = ? AND thirdName IS NOT NULL
+      UNION
+        SELECT fourthName FROM gameRecord WHERE gamename = ? AND fourthName IS NOT NULL
+      UNION
+        SELECT fifthName FROM gameRecord WHERE gamename = ? AND fifthName IS NOT NULL
+      UNION
+        SELECT sixthName FROM gameRecord WHERE gamename = ? AND sixthName IS NOT NULL);"
+
+  let assert Ok([row]) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+      ],
+      expecting: gameuniqueplayers_decoder(),
+    )
+  row
+}
+
+pub fn get_highest_win_percentage(gamename: String) {
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql =
+    "WITH Wins AS (
+      SELECT winnerName AS name, COUNT(*) AS winCount
+      FROM gameRecord WHERE gamename = ? GROUP BY winnerName
+    ),
+    OtherPositions AS (
+      SELECT name, SUM(appearance_count) AS otherCount
+      FROM (
+        SELECT winnerName AS name, COUNT(*) AS appearance_count FROM gameRecord WHERE gamename = ? GROUP BY winnerName
+          UNION ALL
+        SELECT secondName AS name, COUNT(*) AS appearance_count FROM gameRecord WHERE gamename = ? GROUP BY secondName
+          UNION ALL
+        SELECT thirdName, COUNT (*) FROM gameRecord WHERE gamename = ? GROUP BY thirdName
+          UNION ALL
+        SELECT fourthName, COUNT(*) FROM gameRecord WHERE gamename = ? GROUP BY fourthName
+          UNION ALL
+        SELECT fifthName, COUNT(*) FROM gameRecord WHERE gamename = ? GROUP BY fifthName
+          UNION ALL
+        SELECT sixthName, COUNT(*) FROM gameRecord WHERE gamename = ? GROUP BY sixthName
+      ) AS Combined
+      GROUP BY name
+    ),
+    Results AS (
+      SELECT 
+        w.name, w.winCount, COALESCE(o.otherCount, 0) AS totalGames,
+        (CAST(w.winCount AS FLOAT) / NULLIF(COALESCE(o.otherCount, 0), 0)) * 100 AS winPercent
+      FROM Wins w
+      LEFT JOIN OtherPositions o ON w.name = o.name
+      WHERE totalGames > 2
+    )
+    SELECT * FROM Results WHERE winPercent = (SELECT MAX(winPercent) FROM Results);"
+
+  let assert Ok(rows) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+      ],
+      expecting: user_stat_decoder(),
+    )
+  rows
+}
+
+pub fn get_win_count(gamename: String) {
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql =
+    "SELECT winnerName, COUNT(*) AS winCount FROM gameRecord WHERE gamename = ? GROUP BY winnerName ORDER BY winCount DESC;"
+
+  let assert Ok(rows) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [sqlight.text(gamename)],
+      expecting: win_count_decoder(),
+    )
+  rows
 }
