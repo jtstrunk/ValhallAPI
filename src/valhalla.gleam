@@ -62,6 +62,7 @@ pub type GameStats {
     userinformation: List(CurrentUserGameInformation),
     winpercent: List(WinPercent),
     wincount: List(WinCount),
+    playcount: List(WinCount),
   )
 }
 
@@ -429,6 +430,7 @@ pub fn game_stats_encoder(stats: GameStats) -> json.Json {
     ),
     #("winpercent", json.array(stats.winpercent, of: user_stat_encoder)),
     #("wincounts", json.array(stats.wincount, of: win_count_encoder)),
+    #("playcounts", json.array(stats.playcount, of: win_count_encoder)),
   ])
 }
 
@@ -1356,6 +1358,7 @@ pub fn main() {
         let playercount = get_unique_name_count(gamename)
         let winpercent = get_highest_win_percentage(gamename)
         let wincount = get_win_count(gamename)
+        let mostplays = get_most_plays(gamename)
         let result =
           GameStats(
             gameplaycount: playcount,
@@ -1363,6 +1366,7 @@ pub fn main() {
             userinformation: currentuserinformation,
             winpercent: winpercent,
             wincount: wincount,
+            playcount: mostplays,
           )
 
         game_stats_encoder(result)
@@ -1654,7 +1658,6 @@ fn following_games_recursive(
 }
 
 pub fn get_currentuser_game_information(username: String, gamename: String) {
-  io.debug(username)
   let assert Ok(conn) = sqlight.open("tracker.db")
   let sql =
     "SELECT
@@ -1704,17 +1707,17 @@ pub fn get_unique_name_count(gamename: String) {
   let assert Ok(conn) = sqlight.open("tracker.db")
   let sql =
     "SELECT COUNT(*) AS uniquePlayerCount FROM (
-        SELECT winnerName AS name FROM gameRecord WHERE gamename = ? AND winnerName IS NOT NULL
+        SELECT winnerName AS name FROM gameRecord WHERE gamename = ? AND winnerName IS NOT NULL AND winnerName != ''
       UNION
-        SELECT secondName FROM gameRecord WHERE gamename = ? AND secondName IS NOT NULL
+        SELECT secondName FROM gameRecord WHERE gamename = ? AND secondName IS NOT NULL AND secondName != ''
       UNION
-        SELECT thirdName FROM gameRecord WHERE gamename = ? AND thirdName IS NOT NULL
+        SELECT thirdName FROM gameRecord WHERE gamename = ? AND thirdName IS NOT NULL AND thirdName != ''
       UNION
-        SELECT fourthName FROM gameRecord WHERE gamename = ? AND fourthName IS NOT NULL
+        SELECT fourthName FROM gameRecord WHERE gamename = ? AND fourthName IS NOT NULL AND fourthName != ''
       UNION
-        SELECT fifthName FROM gameRecord WHERE gamename = ? AND fifthName IS NOT NULL
+        SELECT fifthName FROM gameRecord WHERE gamename = ? AND fifthName IS NOT NULL AND fifthName != ''
       UNION
-        SELECT sixthName FROM gameRecord WHERE gamename = ? AND sixthName IS NOT NULL);"
+        SELECT sixthName FROM gameRecord WHERE gamename = ? AND sixthName IS NOT NULL AND sixthName != '');"
 
   let assert Ok([row]) =
     sqlight.query(
@@ -1763,9 +1766,8 @@ pub fn get_highest_win_percentage(gamename: String) {
         (CAST(w.winCount AS FLOAT) / NULLIF(COALESCE(o.otherCount, 0), 0)) * 100 AS winPercent
       FROM Wins w
       LEFT JOIN OtherPositions o ON w.name = o.name
-      WHERE totalGames > 2
     )
-    SELECT * FROM Results WHERE winPercent = (SELECT MAX(winPercent) FROM Results);"
+    SELECT * FROM Results ORDER BY winPercent DESC, winCount DESC;"
 
   let assert Ok(rows) =
     sqlight.query(
@@ -1788,13 +1790,63 @@ pub fn get_highest_win_percentage(gamename: String) {
 pub fn get_win_count(gamename: String) {
   let assert Ok(conn) = sqlight.open("tracker.db")
   let sql =
-    "SELECT winnerName, COUNT(*) AS winCount FROM gameRecord WHERE gamename = ? GROUP BY winnerName ORDER BY winCount DESC;"
+    "WITH win_counts AS (
+      SELECT winnerName, COUNT(*) AS winCount
+      FROM gameRecord
+      WHERE gamename = ?
+      GROUP BY winnerName
+    )
+    SELECT winnerName, winCount
+    FROM win_counts
+    WHERE winCount = (SELECT MAX(winCount) FROM win_counts);"
 
   let assert Ok(rows) =
     sqlight.query(
       sql,
       on: conn,
       with: [sqlight.text(gamename)],
+      expecting: win_count_decoder(),
+    )
+  rows
+}
+
+pub fn get_most_plays(gamename: String) {
+  let assert Ok(conn) = sqlight.open("tracker.db")
+  let sql =
+    "WITH play_counts AS (
+       SELECT name, COUNT(*) AS playCount
+       FROM (
+         SELECT winnerName AS name FROM gameRecord WHERE gamename = ?
+         UNION ALL
+         SELECT secondName FROM gameRecord WHERE gamename = ?
+         UNION ALL
+         SELECT thirdName FROM gameRecord WHERE gamename = ?
+         UNION ALL
+         SELECT fourthName FROM gameRecord WHERE gamename = ?
+         UNION ALL
+         SELECT fifthName FROM gameRecord WHERE gamename = ?
+         UNION ALL
+         SELECT sixthName FROM gameRecord WHERE gamename = ?
+       ) AS all_names
+       WHERE name IS NOT NULL
+       GROUP BY name
+     )
+     SELECT name, playCount
+     FROM play_counts
+     WHERE playCount = (SELECT MAX(playCount) FROM play_counts);"
+
+  let assert Ok(rows) =
+    sqlight.query(
+      sql,
+      on: conn,
+      with: [
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+        sqlight.text(gamename),
+      ],
       expecting: win_count_decoder(),
     )
   rows
