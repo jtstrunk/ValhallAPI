@@ -222,6 +222,31 @@ pub fn customlist_tuple_decoder() {
   decode.success(#(id, cardname, list))
 }
 
+pub fn gamecharacter_decoder() {
+  use id <- decode.field("gameid", decode.int)
+  use playeronecharacter <- decode.field("playerOneCharacter", decode.string)
+  use playertwocharacter <- decode.field("playerTwoCharacter", decode.string)
+  use playerthreecharacter <- decode.field(
+    "playerThreecharacter",
+    decode.string,
+  )
+  use playerfourcharacter <- decode.field("playerFourCharacter", decode.string)
+  use playerfivecharacter <- decode.field("playerFiveCharacter", decode.string)
+  use playersixthcharacter <- decode.field(
+    "playerSixthCharacter",
+    decode.string,
+  )
+  decode.success(#(
+    id,
+    playeronecharacter,
+    playertwocharacter,
+    playerthreecharacter,
+    playerfourcharacter,
+    playerfivecharacter,
+    playersixthcharacter,
+  ))
+}
+
 pub fn currentuser_stats_decoder() {
   use wins <- decode.field(0, decode.int)
   use plays <- decode.field(1, decode.int)
@@ -1373,6 +1398,63 @@ pub fn main() {
         |> json.to_string_tree
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["insertgamecharacters"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(
+              gameid,
+              playeronecharacter,
+              playertwocharacter,
+              playerthreecharacter,
+              playerfourcharacter,
+              playerfivecharacter,
+              playersixthcharacter,
+            )) = decode.run(json_result, gamecharacter_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "INSERT INTO gameCharacters (gameid, playerOneCharacter, playerTwoCharacter, playerThreeCharacter, playerFourCharacter, playerFiveCharacter, playerSixthCharacter)
+              VALUES (?, ?, ?, ?, ?, ?, ?);"
+            let assert Ok(_result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [
+                  sqlight.int(gameid),
+                  sqlight.text(playeronecharacter),
+                  sqlight.text(playertwocharacter),
+                  sqlight.text(playerthreecharacter),
+                  sqlight.text(playerfourcharacter),
+                  sqlight.text(playerfivecharacter),
+                  sqlight.text(playersixthcharacter),
+                ],
+                expecting: customlist_decoder(),
+              )
+
+            let followed_user_json =
+              json.object([#("event", json.string("Added Card to Custom List"))])
+
+            json.to_string_tree(followed_user_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
       }
 
       _ -> wisp.not_found()
