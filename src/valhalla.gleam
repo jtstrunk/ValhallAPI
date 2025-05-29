@@ -368,6 +368,43 @@ pub fn follow_endec() {
   decode.success(rowjson)
 }
 
+pub fn characters_endec() {
+  use gameid <- decode.field(0, decode.int)
+  use characterone <- decode.field(1, decode.string)
+  use charactertwo <- decode.field(2, decode.optional(decode.string))
+  use characterthree <- decode.field(3, decode.optional(decode.string))
+  use characterfour <- decode.field(4, decode.optional(decode.string))
+  use characterfive <- decode.field(5, decode.optional(decode.string))
+  use charactersix <- decode.field(6, decode.optional(decode.string))
+
+  let charactersjson =
+    json.object([
+      #("gameid", json.int(gameid)),
+      #("characterOne", json.string(characterone)),
+      #(
+        "characterTwo",
+        charactertwo |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterThree",
+        characterthree |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterFour",
+        characterfour |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterFive",
+        characterfive |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterSix",
+        charactersix |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+    ])
+  decode.success(charactersjson)
+}
+
 // encoders
 pub fn games_row_encoder(record: GameRecord) -> json.Json {
   json.object([
@@ -1424,8 +1461,8 @@ pub fn main() {
 
             let assert Ok(conn) = sqlight.open("tracker.db")
             let sql =
-              "INSERT INTO gameCharacters (gameid, playerOneCharacter, playerTwoCharacter, playerThreeCharacter, playerFourCharacter, playerFiveCharacter, playerSixthCharacter)
-              VALUES (?, ?, ?, ?, ?, ?, ?);"
+              "INSERT INTO gameCharacter (gameid, playerOneCharacter, playerTwoCharacter, playerThreeCharacter, 
+                playerFourCharacter, playerFiveCharacter, playerSixCharacter) VALUES (?, ?, ?, ?, ?, ?, ?);"
             let assert Ok(_result) =
               sqlight.query(
                 sql,
@@ -1443,7 +1480,7 @@ pub fn main() {
               )
 
             let followed_user_json =
-              json.object([#("event", json.string("Added Card to Custom List"))])
+              json.object([#("event", json.string("Inserted Game Characters"))])
 
             json.to_string_tree(followed_user_json)
             |> wisp.json_response(200)
@@ -1456,6 +1493,32 @@ pub fn main() {
           }
         }
       }
+      ["getgamecharacters", encoded_gameid] -> {
+        let gameid = case int.parse(encoded_gameid) {
+          Ok(i) -> i
+          Error(_) -> 0
+        }
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT gameid, playerOneCharacter, playerTwoCharacter, playerThreeCharacter, playerFourCharacter, 
+            playerFiveCharacter, playerSixCharacter FROM gameCharacter WHERE gameid = ?;"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(gameid)],
+            expecting: characters_endec(),
+          )
+
+        let json_array = json.preprocessed_array(result)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
 
       _ -> wisp.not_found()
     }
@@ -1465,7 +1528,7 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    |> mist.port(6220)
+    |> mist.port(8100)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
