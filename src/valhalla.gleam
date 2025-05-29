@@ -225,16 +225,25 @@ pub fn customlist_tuple_decoder() {
 pub fn gamecharacter_decoder() {
   use id <- decode.field("gameid", decode.int)
   use playeronecharacter <- decode.field("playerOneCharacter", decode.string)
-  use playertwocharacter <- decode.field("playerTwoCharacter", decode.string)
-  use playerthreecharacter <- decode.field(
-    "playerThreecharacter",
-    decode.string,
+  use playertwocharacter <- decode.field(
+    "playerTwoCharacter",
+    decode.optional(decode.string),
   )
-  use playerfourcharacter <- decode.field("playerFourCharacter", decode.string)
-  use playerfivecharacter <- decode.field("playerFiveCharacter", decode.string)
+  use playerthreecharacter <- decode.field(
+    "playerThreeCharacter",
+    decode.optional(decode.string),
+  )
+  use playerfourcharacter <- decode.field(
+    "playerFourCharacter",
+    decode.optional(decode.string),
+  )
+  use playerfivecharacter <- decode.field(
+    "playerFiveCharacter",
+    decode.optional(decode.string),
+  )
   use playersixthcharacter <- decode.field(
-    "playerSixthCharacter",
-    decode.string,
+    "playerSixCharacter",
+    decode.optional(decode.string),
   )
   decode.success(#(
     id,
@@ -1470,11 +1479,11 @@ pub fn main() {
                 with: [
                   sqlight.int(gameid),
                   sqlight.text(playeronecharacter),
-                  sqlight.text(playertwocharacter),
-                  sqlight.text(playerthreecharacter),
-                  sqlight.text(playerfourcharacter),
-                  sqlight.text(playerfivecharacter),
-                  sqlight.text(playersixthcharacter),
+                  sqlight.nullable(sqlight.text, playertwocharacter),
+                  sqlight.nullable(sqlight.text, playerthreecharacter),
+                  sqlight.nullable(sqlight.text, playerfourcharacter),
+                  sqlight.nullable(sqlight.text, playerfivecharacter),
+                  sqlight.nullable(sqlight.text, playersixthcharacter),
                 ],
                 expecting: customlist_decoder(),
               )
@@ -1528,7 +1537,7 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    |> mist.port(8100)
+    |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
