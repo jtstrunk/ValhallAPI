@@ -414,6 +414,30 @@ pub fn characters_endec() {
   decode.success(charactersjson)
 }
 
+pub fn headtohead_endec() {
+  use gameid <- decode.field(0, decode.int)
+  use gamename <- decode.field(1, decode.string)
+  use winnername <- decode.field(2, decode.string)
+  use winnerscore <- decode.field(3, decode.int)
+  use secondname <- decode.field(4, decode.string)
+  use secondscore <- decode.field(5, decode.int)
+  use difference <- decode.field(6, decode.int)
+  use date <- decode.field(7, decode.string)
+
+  let gamejson =
+    json.object([
+      #("gameid", json.int(gameid)),
+      #("gamename", json.string(gamename)),
+      #("winnername", json.string(winnername)),
+      #("winnerscore", json.int(winnerscore)),
+      #("secondname", json.string(secondname)),
+      #("secondscore", json.int(secondscore)),
+      #("difference", json.int(difference)),
+      #("date", json.string(date)),
+    ])
+  decode.success(gamejson)
+}
+
 // encoders
 pub fn games_row_encoder(record: GameRecord) -> json.Json {
   json.object([
@@ -1586,6 +1610,86 @@ pub fn main() {
           }
         }
       }
+      ["getanygameheadtohead", encoded_user, encoded_usertwo] -> {
+        let user = case uri.percent_decode(encoded_user) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+        let usertwo = case uri.percent_decode(encoded_usertwo) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT gameid, gameName, winnerName, winnerScore, secondName, secondScore, winnerScore - secondScore as difference, date FROM gameRecord
+            WHERE (winnerName = ? OR winnerName = ?) AND (secondName = ? OR secondName = ?) AND thirdName is null AND gameName != 'Slay the Spire' ORDER BY difference;"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(user),
+              sqlight.text(usertwo),
+              sqlight.text(usertwo),
+              sqlight.text(user),
+            ],
+            expecting: headtohead_endec(),
+          )
+
+        let json_array = json.preprocessed_array(result)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
+      [
+        "getspecificgameheadtohead",
+        encoded_gamename,
+        encoded_user,
+        encoded_usertwo,
+      ] -> {
+        let gamename = case uri.percent_decode(encoded_gamename) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+        let user = case uri.percent_decode(encoded_user) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+        let usertwo = case uri.percent_decode(encoded_usertwo) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT gameid, gameName, winnerName, winnerScore, secondName, secondScore, winnerScore - secondScore as difference, date FROM gameRecord WHERE gameName = ? 
+            AND (winnerName = ? OR winnerName = ?) AND (secondName = ? OR secondName = ?) AND thirdName is null ORDER BY difference;"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(gamename),
+              sqlight.text(user),
+              sqlight.text(usertwo),
+              sqlight.text(usertwo),
+              sqlight.text(user),
+            ],
+            expecting: headtohead_endec(),
+          )
+
+        let json_array = json.preprocessed_array(result)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
 
       _ -> wisp.not_found()
     }
@@ -1595,7 +1699,8 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    |> mist.port(6220)
+    |> mist.port(8000)
+    // |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
