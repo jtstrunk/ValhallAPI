@@ -25,8 +25,8 @@ pub type GameRecord {
     gamename: String,
     winnername: String,
     winnerscore: Int,
-    secondname: String,
-    secondscore: Int,
+    secondname: option.Option(String),
+    secondscore: option.Option(Int),
     thirdname: option.Option(String),
     thirdscore: option.Option(Int),
     fourthname: option.Option(String),
@@ -72,8 +72,8 @@ fn insert_decoder() {
   use gamename <- decode.field("gamename", decode.string)
   use winnername <- decode.field("winnername", decode.string)
   use winnerscore <- decode.field("winnerscore", decode.int)
-  use secondname <- decode.field("secondname", decode.string)
-  use secondscore <- decode.field("secondscore", decode.int)
+  use secondname <- decode.field("secondname", decode.optional(decode.string))
+  use secondscore <- decode.field("secondscore", decode.optional(decode.int))
   use thirdname <- decode.field("thirdname", decode.optional(decode.string))
   use thirdscore <- decode.field("thirdscore", decode.optional(decode.int))
   use fourthname <- decode.field("fourthname", decode.optional(decode.string))
@@ -107,8 +107,8 @@ fn update_decoder() {
   use gameid <- decode.field("gameid", decode.int)
   use winnername <- decode.field("winnername", decode.string)
   use winnerscore <- decode.field("winnerscore", decode.int)
-  use secondname <- decode.field("secondname", decode.string)
-  use secondscore <- decode.field("secondscore", decode.int)
+  use secondname <- decode.field("secondname", decode.optional(decode.string))
+  use secondscore <- decode.field("secondscore", decode.optional(decode.int))
   use thirdname <- decode.field("thirdname", decode.optional(decode.string))
   use thirdscore <- decode.field("thirdscore", decode.optional(decode.int))
   use fourthname <- decode.field("fourthname", decode.optional(decode.string))
@@ -143,8 +143,8 @@ pub fn games_row_decoder() {
   use gamename <- decode.field(2, decode.string)
   use winnername <- decode.field(3, decode.string)
   use winnerscore <- decode.field(4, decode.int)
-  use secondname <- decode.field(5, decode.string)
-  use secondscore <- decode.field(6, decode.int)
+  use secondname <- decode.field(5, decode.optional(decode.string))
+  use secondscore <- decode.field(6, decode.optional(decode.int))
   use thirdname <- decode.field(7, decode.optional(decode.string))
   use thirdscore <- decode.field(8, decode.optional(decode.int))
   use fourthname <- decode.field(9, decode.optional(decode.string))
@@ -293,8 +293,8 @@ pub fn games_row_endec() {
   use gamename <- decode.field(2, decode.string)
   use winnername <- decode.field(3, decode.string)
   use winnerscore <- decode.field(4, decode.int)
-  use secondname <- decode.field(5, decode.string)
-  use secondscore <- decode.field(6, decode.int)
+  use secondname <- decode.field(5, decode.optional(decode.string))
+  use secondscore <- decode.field(6, decode.optional(decode.int))
   use thirdname <- decode.field(7, decode.optional(decode.string))
   use thirdscore <- decode.field(8, decode.optional(decode.int))
   use fourthname <- decode.field(9, decode.optional(decode.string))
@@ -312,8 +312,14 @@ pub fn games_row_endec() {
       #("gamename", json.string(gamename)),
       #("winnername", json.string(winnername)),
       #("winnerscore", json.int(winnerscore)),
-      #("secondname", json.string(secondname)),
-      #("secondscore", json.int(secondscore)),
+      #(
+        "secondname",
+        secondname |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "secondscore",
+        secondscore |> option.map(json.int) |> option.unwrap(json.null()),
+      ),
       #(
         "thirdname",
         thirdname |> option.map(json.string) |> option.unwrap(json.null()),
@@ -446,8 +452,14 @@ pub fn games_row_encoder(record: GameRecord) -> json.Json {
     #("gamename", json.string(record.gamename)),
     #("winnername", json.string(record.winnername)),
     #("winnerscore", json.int(record.winnerscore)),
-    #("secondname", json.string(record.secondname)),
-    #("secondscore", json.int(record.secondscore)),
+    #(
+      "secondname",
+      record.secondname |> option.map(json.string) |> option.unwrap(json.null()),
+    ),
+    #(
+      "secondscore",
+      record.secondscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
     #(
       "thirdname",
       record.thirdname |> option.map(json.string) |> option.unwrap(json.null()),
@@ -604,8 +616,8 @@ pub fn main() {
                   sqlight.text(gamename),
                   sqlight.text(winnername),
                   sqlight.int(winnerscore),
-                  sqlight.text(secondname),
-                  sqlight.int(secondscore),
+                  sqlight.nullable(sqlight.text, secondname),
+                  sqlight.nullable(sqlight.int, secondscore),
                   sqlight.nullable(sqlight.text, thirdname),
                   sqlight.nullable(sqlight.int, thirdscore),
                   sqlight.nullable(sqlight.text, fourthname),
@@ -669,8 +681,8 @@ pub fn main() {
                 sqlight.query(sql, conn, decode.int, with: [
                   sqlight.text(winnername),
                   sqlight.int(winnerscore),
-                  sqlight.text(secondname),
-                  sqlight.int(secondscore),
+                  sqlight.nullable(sqlight.text, secondname),
+                  sqlight.nullable(sqlight.int, secondscore),
                   sqlight.nullable(sqlight.text, thirdname),
                   sqlight.nullable(sqlight.int, thirdscore),
                   sqlight.nullable(sqlight.text, fourthname),
@@ -1699,8 +1711,8 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    |> mist.port(8000)
-    // |> mist.port(6220)
+    // |> mist.port(8000)
+    |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
