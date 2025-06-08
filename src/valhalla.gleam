@@ -262,6 +262,17 @@ pub fn currentuser_stats_decoder() {
   decode.success(CurrentUserGameInformation(win_count: wins, total_games: plays))
 }
 
+pub fn currentuser_slaythespire_stats_decoder() {
+  use number <- decode.field(0, decode.int)
+  decode.success(number)
+}
+
+pub fn character_usage_decoder() {
+  use name <- decode.field(0, decode.string)
+  use plays <- decode.field(1, decode.int)
+  decode.success(#(name, plays))
+}
+
 pub fn gameuniqueplayers_decoder() {
   use count <- decode.field(0, decode.int)
   decode.success(count)
@@ -1478,6 +1489,193 @@ pub fn main() {
 
         game_stats_encoder(result)
         |> json.to_string_tree
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["getslaythespireinformation", encoded_name] -> {
+        let username = case uri.percent_decode(encoded_name) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT
+            SUM(CASE WHEN winnerName = ? AND gameName = 'Slay the Spire' THEN 1 ELSE 0 END) +
+            SUM(CASE WHEN secondName = ? AND gameName = 'Slay the Spire' THEN 1 ELSE 0 END) +
+            SUM(CASE WHEN thirdName = ? AND gameName = 'Slay the Spire' THEN 1 ELSE 0 END) +
+            SUM(CASE WHEN fourthName = ? AND gameName = 'Slay the Spire' THEN 1 ELSE 0 END) AS totalcount
+          FROM gameRecord;"
+
+        let assert Ok(totalcount) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+            ],
+            expecting: currentuser_slaythespire_stats_decoder(),
+          )
+        let plays = case list.first(totalcount) {
+          Ok(play) -> play
+          Error(_) -> 0
+        }
+
+        let sql =
+          "SELECT
+            SUM(CASE WHEN winnerName = ? AND gameName = 'Slay the Spire' AND winnerScore >= 3 THEN 1 ELSE 0 END) +
+            SUM(CASE WHEN secondName = ? AND gameName = 'Slay the Spire' AND winnerScore >= 3 THEN 1 ELSE 0 END) +
+            SUM(CASE WHEN thirdName = ? AND gameName = 'Slay the Spire' AND winnerScore >= 3 THEN 1 ELSE 0 END) +
+            SUM(CASE WHEN fourthName = ? AND gameName = 'Slay the Spire' AND winnerScore >= 3 THEN 1 ELSE 0 END) AS totalwins
+          FROM gameRecord;"
+
+        let assert Ok(totalwins) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+            ],
+            expecting: currentuser_slaythespire_stats_decoder(),
+          )
+        let wins = case list.first(totalwins) {
+          Ok(win) -> win
+          Error(_) -> 0
+        }
+
+        let sql =
+          "SELECT secondScore
+            FROM gameRecord
+            WHERE gameName = 'Slay the Spire'
+              AND (
+                winnerName = ?
+                OR secondName = ?
+                OR thirdName = ?
+                OR fourthName = ?
+              )
+            ORDER BY secondScore DESC
+            LIMIT 1;"
+
+        let assert Ok(totalascension) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+            ],
+            expecting: currentuser_slaythespire_stats_decoder(),
+          )
+        let ascensions = case list.first(totalascension) {
+          Ok(ascension) -> ascension
+          Error(_) -> 0
+        }
+
+        let sql =
+          "SELECT character_name, COUNT(*) AS times_used
+            FROM (
+              SELECT gc.playerOneCharacter AS character_name
+              FROM gameRecord gr
+              JOIN gameCharacter gc ON gr.gameID = gc.gameid
+              WHERE gr.winnerName = ?
+              UNION ALL
+
+              SELECT gc.playerTwoCharacter AS character_name
+              FROM gameRecord gr
+              JOIN gameCharacter gc ON gr.gameID = gc.gameid
+              WHERE gr.secondName = ?
+              UNION ALL
+
+              SELECT gc.playerThreeCharacter AS character_name
+              FROM gameRecord gr
+              JOIN gameCharacter gc ON gr.gameID = gc.gameid
+              WHERE gr.thirdName = ?
+              UNION ALL
+
+              SELECT gc.playerFourCharacter AS character_name
+              FROM gameRecord gr
+              JOIN gameCharacter gc ON gr.gameID = gc.gameid
+              WHERE gr.fourthName = ?)
+            WHERE character_name IS NOT NULL
+            GROUP BY character_name
+            ORDER BY times_used DESC;"
+
+        let assert Ok(character_usage_rows) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+              sqlight.text(username),
+            ],
+            expecting: character_usage_decoder(),
+          )
+        // let json_array = json.preprocessed_array(character_usage_rows)
+        let character_tuple = case list.first(character_usage_rows) {
+          Ok(#(charactername, characterplays)) -> #(
+            charactername,
+            characterplays,
+          )
+          Error(_) -> #("", 0)
+        }
+        let #(charactername, characterplays) = character_tuple
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT COUNT(*) AS uniquePlayerCount FROM (
+              SELECT winnerName AS name FROM gameRecord WHERE gamename = 'Slay the Spire' AND winnerName IS NOT NULL AND winnerName != ''
+            UNION
+              SELECT secondName FROM gameRecord WHERE gamename = 'Slay the Spire' AND secondName IS NOT NULL AND secondName != ''
+            UNION
+                SELECT thirdName FROM gameRecord WHERE gamename = 'Slay the Spire' AND thirdName IS NOT NULL AND thirdName != ''
+            UNION
+              SELECT fourthName FROM gameRecord WHERE gamename = 'Slay the Spire' AND fourthName IS NOT NULL AND fourthName != ''
+            UNION
+              SELECT fifthName FROM gameRecord WHERE gamename = 'Slay the Spire' AND fifthName IS NOT NULL AND fifthName != ''
+            UNION
+              SELECT sixthName FROM gameRecord WHERE gamename = 'Slay the Spire' AND sixthName IS NOT NULL AND sixthName != '');"
+
+        let assert Ok([playercount]) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [],
+            expecting: gameuniqueplayers_decoder(),
+          )
+
+        let sql =
+          "SELECT COUNT(*) AS playCount FROM gameRecord WHERE gamename = 'Slay the Spire';"
+
+        let assert Ok([gameplaycount]) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [],
+            expecting: gameuniqueplayers_decoder(),
+          )
+
+        let gameinserted_json =
+          json.object([
+            #("Wins", json.int(wins)),
+            #("Plays", json.int(plays)),
+            #("Ascension", json.int(ascensions)),
+            #("CharacterName", json.string(charactername)),
+            #("CharacterPlays", json.int(characterplays)),
+            #("CharacterPlays", json.int(characterplays)),
+            #("GamePlayCount", json.int(gameplaycount)),
+            #("PlayerCount", json.int(playercount)),
+          ])
+        json.to_string_tree(gameinserted_json)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
       }
