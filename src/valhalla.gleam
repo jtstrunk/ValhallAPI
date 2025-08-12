@@ -35,6 +35,8 @@ pub type GameRecord {
     fifthscore: option.Option(Int),
     sixthname: option.Option(String),
     sixthscore: option.Option(Int),
+    seventhname: option.Option(String),
+    seventhscore: option.Option(Int),
     date: String,
   )
 }
@@ -82,6 +84,8 @@ fn insert_decoder() {
   use fifthscore <- decode.field("fifthscore", decode.optional(decode.int))
   use sixthname <- decode.field("sixthname", decode.optional(decode.string))
   use sixthscore <- decode.field("sixthscore", decode.optional(decode.int))
+  use seventhname <- decode.field("seventhname", decode.optional(decode.string))
+  use seventhscore <- decode.field("seventhscore", decode.optional(decode.int))
   use date <- decode.field("date", decode.optional(decode.string))
 
   decode.success(#(
@@ -99,6 +103,8 @@ fn insert_decoder() {
     fifthscore,
     sixthname,
     sixthscore,
+    seventhname,
+    seventhscore,
     date,
   ))
 }
@@ -117,6 +123,8 @@ fn update_decoder() {
   use fifthscore <- decode.field("fifthscore", decode.optional(decode.int))
   use sixthname <- decode.field("sixthname", decode.optional(decode.string))
   use sixthscore <- decode.field("sixthscore", decode.optional(decode.int))
+  use seventhname <- decode.field("seventhname", decode.optional(decode.string))
+  use seventhscore <- decode.field("seventhscore", decode.optional(decode.int))
   use date <- decode.field("date", decode.string)
 
   decode.success(#(
@@ -133,6 +141,8 @@ fn update_decoder() {
     fifthscore,
     sixthname,
     sixthscore,
+    seventhname,
+    seventhscore,
     date,
   ))
 }
@@ -154,6 +164,8 @@ pub fn games_row_decoder() {
   use sixthname <- decode.field(13, decode.optional(decode.string))
   use sixthscore <- decode.field(14, decode.optional(decode.int))
   use date <- decode.field(15, decode.string)
+  use seventhname <- decode.field(16, decode.optional(decode.string))
+  use seventhscore <- decode.field(17, decode.optional(decode.int))
 
   decode.success(GameRecord(
     gameid,
@@ -171,6 +183,8 @@ pub fn games_row_decoder() {
     fifthscore,
     sixthname,
     sixthscore,
+    seventhname,
+    seventhscore,
     date,
   ))
 }
@@ -315,6 +329,8 @@ pub fn games_row_endec() {
   use sixthname <- decode.field(13, decode.optional(decode.string))
   use sixthscore <- decode.field(14, decode.optional(decode.int))
   use date <- decode.field(15, decode.string)
+  use seventhname <- decode.field(16, decode.optional(decode.string))
+  use seventhscore <- decode.field(17, decode.optional(decode.int))
 
   let rowjson =
     json.object([
@@ -362,6 +378,14 @@ pub fn games_row_endec() {
       #(
         "sixthscore",
         sixthscore |> option.map(json.int) |> option.unwrap(json.null()),
+      ),
+      #(
+        "seventhname",
+        seventhname |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "seventhscore",
+        seventhscore |> option.map(json.int) |> option.unwrap(json.null()),
       ),
       #("date", json.string(date)),
     ])
@@ -503,6 +527,16 @@ pub fn games_row_encoder(record: GameRecord) -> json.Json {
       "sixthscore",
       record.sixthscore |> option.map(json.int) |> option.unwrap(json.null()),
     ),
+    #(
+      "seventhname",
+      record.seventhname
+        |> option.map(json.string)
+        |> option.unwrap(json.null()),
+    ),
+    #(
+      "seventhscore",
+      record.seventhscore |> option.map(json.int) |> option.unwrap(json.null()),
+    ),
     #("date", json.string(record.date)),
   ])
 }
@@ -593,6 +627,8 @@ pub fn main() {
               fifthscore,
               sixthname,
               sixthscore,
+              seventhname,
+              seventhscore,
               date,
             )) = decode.run(json_result, insert_decoder())
 
@@ -616,8 +652,8 @@ pub fn main() {
             }
 
             let sql =
-              "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, sixthName, sixthScore, date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, sixthName, sixthScore, date, seventhname, seventhscore)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
             let _ =
               io.debug(
@@ -638,6 +674,8 @@ pub fn main() {
                   sqlight.nullable(sqlight.text, sixthname),
                   sqlight.nullable(sqlight.int, sixthscore),
                   sqlight.text(gamedate),
+                  sqlight.nullable(sqlight.text, seventhname),
+                  sqlight.nullable(sqlight.int, seventhscore),
                 ]),
               )
 
@@ -680,12 +718,14 @@ pub fn main() {
               fifthscore,
               sixthname,
               sixthscore,
+              seventhname,
+              seventhscore,
               date,
             )) = decode.run(json_result, update_decoder())
 
             let assert Ok(conn) = sqlight.open("tracker.db")
             let sql =
-              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, sixthname = ?, sixthscore = ?, date = ? WHERE gameID = ?"
+              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, sixthname = ?, sixthscore = ?, date = ?, seventhname = ?, seventhscore = ? WHERE gameID = ?"
 
             let _ =
               io.debug(
@@ -704,6 +744,8 @@ pub fn main() {
                   sqlight.nullable(sqlight.int, sixthscore),
                   sqlight.text(date),
                   sqlight.int(gameid),
+                  sqlight.nullable(sqlight.text, seventhname),
+                  sqlight.nullable(sqlight.int, seventhscore),
                 ]),
               )
 
@@ -730,8 +772,8 @@ pub fn main() {
 
         let assert Ok(conn) = sqlight.open("tracker.db")
         let sql =
-          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC;"
+          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? 
+          OR fourthName = ? OR fifthName = ? OR sixthName = ? OR seventhName = ? ORDER BY gameID DESC;"
 
         let assert Ok(rows) =
           sqlight.query(
@@ -744,11 +786,11 @@ pub fn main() {
               sqlight.text(name),
               sqlight.text(name),
               sqlight.text(name),
+              sqlight.text(name),
             ],
             expecting: games_row_endec(),
           )
         let gamerows = json.preprocessed_array(rows)
-        // wisp.json_response(json.to_string_tree(gamerows), 200)
 
         json.to_string_tree(gamerows)
         |> wisp.json_response(200)
@@ -768,8 +810,8 @@ pub fn main() {
         let limit = 12
         let assert Ok(conn) = sqlight.open("tracker.db")
         let sql =
-          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
+          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? 
+          OR fifthName = ? OR sixthName = ? OR seventhName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
 
         let assert Ok(rows) =
           sqlight.query(
@@ -782,12 +824,13 @@ pub fn main() {
               sqlight.text(name),
               sqlight.text(name),
               sqlight.text(name),
+              sqlight.text(name),
               sqlight.int(limit),
               sqlight.int(offset),
             ],
             expecting: games_row_decoder(),
           )
-        // here
+
         let json = list.map(rows, games_row_encoder)
         let gamejson = json.preprocessed_array(json)
 
@@ -809,14 +852,15 @@ pub fn main() {
         let limit = 12
         let assert Ok(conn) = sqlight.open("tracker.db")
         let sql =
-          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
+          "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? 
+          OR fifthName = ? OR sixthName = ? OR seventhName = ? ORDER BY gameID DESC LIMIT ? OFFSET ?;"
 
         let assert Ok(rows) =
           sqlight.query(
             sql,
             on: conn,
             with: [
+              sqlight.text(name),
               sqlight.text(name),
               sqlight.text(name),
               sqlight.text(name),
@@ -878,8 +922,8 @@ pub fn main() {
 
         let sql =
           "SELECT * FROM gameRecord WHERE (winnerName = ? OR secondName = ?
-          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ?)
-          AND date <= ? AND date >= ? ORDER BY gameID;"
+          OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? 
+          OR seventhName = ?) AND date <= ? AND date >= ? ORDER BY gameID;"
 
         let all_rows = following_games(users, firstdate, lastdate, conn, sql)
         let combinedgames = list.append(all_rows, rows)
@@ -1620,7 +1664,7 @@ pub fn main() {
             ],
             expecting: character_usage_decoder(),
           )
-        // let json_array = json.preprocessed_array(character_usage_rows)
+
         let character_tuple = case list.first(character_usage_rows) {
           Ok(#(charactername, characterplays)) -> #(
             charactername,
@@ -1639,11 +1683,7 @@ pub fn main() {
             UNION
                 SELECT thirdName FROM gameRecord WHERE gamename = 'Slay the Spire' AND thirdName IS NOT NULL AND thirdName != ''
             UNION
-              SELECT fourthName FROM gameRecord WHERE gamename = 'Slay the Spire' AND fourthName IS NOT NULL AND fourthName != ''
-            UNION
-              SELECT fifthName FROM gameRecord WHERE gamename = 'Slay the Spire' AND fifthName IS NOT NULL AND fifthName != ''
-            UNION
-              SELECT sixthName FROM gameRecord WHERE gamename = 'Slay the Spire' AND sixthName IS NOT NULL AND sixthName != '');"
+              SELECT fourthName FROM gameRecord WHERE gamename = 'Slay the Spire' AND fourthName IS NOT NULL AND fourthName != '');"
 
         let assert Ok([playercount]) =
           sqlight.query(
@@ -1909,8 +1949,8 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    // |> mist.port(8000)
-    |> mist.port(6220)
+    |> mist.port(8000)
+    // |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
@@ -1937,12 +1977,13 @@ pub fn calc_games_played(name) {
   let assert Ok(conn) = sqlight.open("tracker.db")
   let sql =
     "SELECT * FROM gameRecord WHERE winnerName = ? OR secondName = ?
-    OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ?;"
+    OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? OR seventhName = ?;"
   let assert Ok(rows) =
     sqlight.query(
       sql,
       on: conn,
       with: [
+        sqlight.text(name),
         sqlight.text(name),
         sqlight.text(name),
         sqlight.text(name),
@@ -1976,12 +2017,13 @@ pub fn calc_most_played(name) {
   let assert Ok(conn) = sqlight.open("tracker.db")
   let sql =
     "SELECT gameName FROM gameRecord WHERE winnerName = ? OR secondName = ?
-    OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ?;"
+    OR thirdName = ? OR fourthName = ? OR fifthName = ? OR sixthName = ? OR seventhName = ?;"
   let assert Ok(all_games) =
     sqlight.query(
       sql,
       on: conn,
       with: [
+        sqlight.text(name),
         sqlight.text(name),
         sqlight.text(name),
         sqlight.text(name),
@@ -2046,19 +2088,66 @@ pub fn calc_most_won(name) {
 pub fn find_unique_names(name) {
   let assert Ok(conn) = sqlight.open("tracker.db")
   let sql =
-    "SELECT name, COUNT(*) as frequency
+    "SELECT name, COUNT(*) AS frequency
     FROM (
-      SELECT winnerName AS name FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? OR fifthName = ?
+      SELECT winnerName AS name FROM gameRecord WHERE gameID IN (
+        SELECT gameID FROM gameRecord
+        WHERE ? IN (
+          winnerName, secondName, thirdName,
+          fourthName, fifthName, sixthName, seventhName
+        )
+      )
       UNION ALL
-      SELECT secondName FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? OR fifthName = ?
+      SELECT secondName FROM gameRecord WHERE gameID IN (
+        SELECT gameID FROM gameRecord
+        WHERE ? IN (
+          winnerName, secondName, thirdName,
+          fourthName, fifthName, sixthName, seventhName
+        )
+      )
       UNION ALL
-      SELECT thirdName FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? OR fifthName = ?
+      SELECT thirdName FROM gameRecord WHERE gameID IN (
+        SELECT gameID FROM gameRecord
+        WHERE ? IN (
+          winnerName, secondName, thirdName,
+          fourthName, fifthName, sixthName, seventhName
+        )
+      )
       UNION ALL
-      SELECT fourthName FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? OR fifthName = ?
+      SELECT fourthName FROM gameRecord WHERE gameID IN (
+        SELECT gameID FROM gameRecord
+        WHERE ? IN (
+          winnerName, secondName, thirdName,
+          fourthName, fifthName, sixthName, seventhName
+        )
+      )
       UNION ALL
-      SELECT fifthName FROM gameRecord WHERE winnerName = ? OR secondName = ? OR thirdName = ? OR fourthName = ? OR fifthName = ?
+      SELECT fifthName FROM gameRecord WHERE gameID IN (
+        SELECT gameID FROM gameRecord
+        WHERE ? IN (
+          winnerName, secondName, thirdName,
+          fourthName, fifthName, sixthName, seventhName
+        )
+      )
+      UNION ALL
+      SELECT sixthName FROM gameRecord WHERE gameID IN (
+        SELECT gameID FROM gameRecord
+        WHERE ? IN (
+          winnerName, secondName, thirdName,
+          fourthName, fifthName, sixthName, seventhName
+        )
+      )
+      UNION ALL
+      SELECT seventhName FROM gameRecord WHERE gameID IN (
+        SELECT gameID FROM gameRecord
+        WHERE ? IN (
+          winnerName, secondName, thirdName,
+          fourthName, fifthName, sixthName, seventhName
+        )
+      )
     ) AS names
-    WHERE name != ? AND name IS NOT NULL
+    WHERE name IS NOT NULL
+      AND name != ?
     GROUP BY name
     ORDER BY frequency DESC;"
 
@@ -2067,24 +2156,6 @@ pub fn find_unique_names(name) {
       sql,
       on: conn,
       with: [
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
-        sqlight.text(name),
         sqlight.text(name),
         sqlight.text(name),
         sqlight.text(name),
@@ -2194,7 +2265,8 @@ pub fn get_currentuser_game_information(username: String, gamename: String) {
       SUM(CASE WHEN thirdName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN fourthName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN fifthName = ? THEN 1 ELSE 0 END) +
-      SUM(CASE WHEN sixthName = ? THEN 1 ELSE 0 END) AS total_appearances
+      SUM(CASE WHEN sixthName = ? THEN 1 ELSE 0 END
+      SUM(CASE WHEN seventhName = ? THEN 1 ELSE 0 END) AS total_appearances
     FROM gameRecord WHERE gamename = ?;"
 
   let assert Ok(row) =
@@ -2209,6 +2281,7 @@ pub fn get_currentuser_game_information(username: String, gamename: String) {
         sqlight.text(username),
         sqlight.text(username),
         sqlight.text(username),
+        sqlight.text(gamename),
         sqlight.text(gamename),
       ],
       expecting: currentuser_stats_decoder(),
@@ -2244,13 +2317,16 @@ pub fn get_unique_name_count(gamename: String) {
       UNION
         SELECT fifthName FROM gameRecord WHERE gamename = ? AND fifthName IS NOT NULL AND fifthName != ''
       UNION
-        SELECT sixthName FROM gameRecord WHERE gamename = ? AND sixthName IS NOT NULL AND sixthName != '');"
+        SELECT sixthName FROM gameRecord WHERE gamename = ? AND sixthName IS NOT NULL AND sixthName != ''
+      UNION
+        SELECT seventhName FROM gameRecord WHERE gamename = ? AND seventhName IS NOT NULL AND seventhName != '');"
 
   let assert Ok([row]) =
     sqlight.query(
       sql,
       on: conn,
       with: [
+        sqlight.text(gamename),
         sqlight.text(gamename),
         sqlight.text(gamename),
         sqlight.text(gamename),
@@ -2284,6 +2360,8 @@ pub fn get_highest_win_percentage(gamename: String) {
         SELECT fifthName, COUNT(*) FROM gameRecord WHERE gamename = ? GROUP BY fifthName
           UNION ALL
         SELECT sixthName, COUNT(*) FROM gameRecord WHERE gamename = ? GROUP BY sixthName
+          UNION ALL
+        SELECT seventhName, COUNT(*) FROM gameRecord WHERE gamename = ? GROUP BY seventhName
       ) AS Combined
       GROUP BY name
     ),
@@ -2301,6 +2379,7 @@ pub fn get_highest_win_percentage(gamename: String) {
       sql,
       on: conn,
       with: [
+        sqlight.text(gamename),
         sqlight.text(gamename),
         sqlight.text(gamename),
         sqlight.text(gamename),
@@ -2354,6 +2433,8 @@ pub fn get_most_plays(gamename: String) {
          SELECT fifthName FROM gameRecord WHERE gamename = ?
          UNION ALL
          SELECT sixthName FROM gameRecord WHERE gamename = ?
+         UNION ALL
+         SELECT seventhName FROM gameRecord WHERE gamename = ?
        ) AS all_names
        WHERE name IS NOT NULL
        GROUP BY name
@@ -2367,6 +2448,7 @@ pub fn get_most_plays(gamename: String) {
       sql,
       on: conn,
       with: [
+        sqlight.text(gamename),
         sqlight.text(gamename),
         sqlight.text(gamename),
         sqlight.text(gamename),
