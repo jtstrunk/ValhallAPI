@@ -2265,7 +2265,7 @@ pub fn get_currentuser_game_information(username: String, gamename: String) {
       SUM(CASE WHEN thirdName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN fourthName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN fifthName = ? THEN 1 ELSE 0 END) +
-      SUM(CASE WHEN sixthName = ? THEN 1 ELSE 0 END)
+      SUM(CASE WHEN sixthName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN seventhName = ? THEN 1 ELSE 0 END) AS total_appearances
     FROM gameRecord WHERE gamename = ?;"
 
