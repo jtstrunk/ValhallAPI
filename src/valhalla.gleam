@@ -725,7 +725,7 @@ pub fn main() {
 
             let assert Ok(conn) = sqlight.open("tracker.db")
             let sql =
-              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, sixthname = ?, sixthscore = ?, date = ?, seventhname = ?, seventhscore = ? WHERE gameID = ?"
+              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, sixthname = ?, sixthscore = ?, seventhname = ?, seventhscore = ?, date = ? WHERE gameID = ?"
 
             let _ =
               io.debug(
@@ -742,10 +742,10 @@ pub fn main() {
                   sqlight.nullable(sqlight.int, fifthscore),
                   sqlight.nullable(sqlight.text, sixthname),
                   sqlight.nullable(sqlight.int, sixthscore),
-                  sqlight.text(date),
-                  sqlight.int(gameid),
                   sqlight.nullable(sqlight.text, seventhname),
                   sqlight.nullable(sqlight.int, seventhscore),
+                  sqlight.text(date),
+                  sqlight.int(gameid),
                 ]),
               )
 
@@ -2265,7 +2265,7 @@ pub fn get_currentuser_game_information(username: String, gamename: String) {
       SUM(CASE WHEN thirdName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN fourthName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN fifthName = ? THEN 1 ELSE 0 END) +
-      SUM(CASE WHEN sixthName = ? THEN 1 ELSE 0 END)
+      SUM(CASE WHEN sixthName = ? THEN 1 ELSE 0 END) +
       SUM(CASE WHEN seventhName = ? THEN 1 ELSE 0 END) AS total_appearances
     FROM gameRecord WHERE gamename = ?;"
 
