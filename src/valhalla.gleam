@@ -273,30 +273,32 @@ pub fn gamecharacter_decoder() {
 pub fn alternatescore_decoder() {
   use id <- decode.field("gameid", decode.int)
   use gamename <- decode.field("gamename", decode.string)
-  use playeronealtscore <- decode.field("playerOneAltScore", decode.string)
+  use alttype <- decode.field("alttype", decode.string)
+  use playeronealtscore <- decode.field("playerOneAltScore", decode.int)
   use playertwoaltscore <- decode.field(
     "playerTwoAltScore",
-    decode.optional(decode.string),
+    decode.optional(decode.int),
   )
   use playerthreealtscore <- decode.field(
     "playerThreeAltScore",
-    decode.optional(decode.string),
+    decode.optional(decode.int),
   )
   use playerfouraltscore <- decode.field(
     "playerFourAltScore",
-    decode.optional(decode.string),
+    decode.optional(decode.int),
   )
   use playerfivealtscore <- decode.field(
     "playerFiveAltScore",
-    decode.optional(decode.string),
+    decode.optional(decode.int),
   )
   use playersixaltscore <- decode.field(
     "playerSixAltScore",
-    decode.optional(decode.string),
+    decode.optional(decode.int),
   )
   decode.success(#(
     id,
     gamename,
+    alttype,
     playeronealtscore,
     playertwoaltscore,
     playerthreealtscore,
@@ -493,41 +495,39 @@ pub fn characters_endec() {
 
 pub fn alternatescore_endec() {
   use gameid <- decode.field(0, decode.int)
-  use gamename <- decode.field(1, decode.string)
-  use altscoreone <- decode.field(2, decode.string)
-  use altscoretwo <- decode.field(3, decode.optional(decode.string))
-  use altscorethree <- decode.field(4, decode.optional(decode.string))
-  use altscorefour <- decode.field(5, decode.optional(decode.string))
-  use altscorefive <- decode.field(6, decode.optional(decode.string))
-  use altscoresix <- decode.field(7, decode.optional(decode.string))
+  use altscoreone <- decode.field(1, decode.int)
+  use altscoretwo <- decode.field(2, decode.optional(decode.int))
+  use altscorethree <- decode.field(3, decode.optional(decode.int))
+  use altscorefour <- decode.field(4, decode.optional(decode.int))
+  use altscorefive <- decode.field(5, decode.optional(decode.int))
+  use altscoresix <- decode.field(6, decode.optional(decode.int))
 
-  let charactersjson =
+  let altscoresjson =
     json.object([
       #("gameid", json.int(gameid)),
-      #("gamename", json.string(gamename)),
-      #("characterOne", json.string(altscoreone)),
+      #("scoreOne", json.int(altscoreone)),
       #(
-        "characterTwo",
-        altscoretwo |> option.map(json.string) |> option.unwrap(json.null()),
+        "scoreTwo",
+        altscoretwo |> option.map(json.int) |> option.unwrap(json.null()),
       ),
       #(
-        "characterThree",
-        altscorethree |> option.map(json.string) |> option.unwrap(json.null()),
+        "scoreThree",
+        altscorethree |> option.map(json.int) |> option.unwrap(json.null()),
       ),
       #(
-        "characterFour",
-        altscorefour |> option.map(json.string) |> option.unwrap(json.null()),
+        "scoreFour",
+        altscorefour |> option.map(json.int) |> option.unwrap(json.null()),
       ),
       #(
-        "characterFive",
-        altscorefive |> option.map(json.string) |> option.unwrap(json.null()),
+        "scoreFive",
+        altscorefive |> option.map(json.int) |> option.unwrap(json.null()),
       ),
       #(
-        "characterSix",
-        altscoresix |> option.map(json.string) |> option.unwrap(json.null()),
+        "scoreSix",
+        altscoresix |> option.map(json.int) |> option.unwrap(json.null()),
       ),
     ])
-  decode.success(charactersjson)
+  decode.success(altscoresjson)
 }
 
 pub fn headtohead_endec() {
@@ -1944,7 +1944,7 @@ pub fn main() {
         let assert Ok(conn) = sqlight.open("tracker.db")
         let sql =
           "SELECT gameid, playerOneAltScore, playerTwoAltScore, playerThreeAltScore, playerFourAltScore, 
-            playerFiveAltScore, playerSixAltScore FROM gameCharacter WHERE gameid = ?;"
+            playerFiveAltScore, playerSixAltScore FROM alternateGameScores WHERE gameid = ?;"
         let assert Ok(result) =
           sqlight.query(
             sql,
@@ -1977,6 +1977,7 @@ pub fn main() {
             let assert Ok(#(
               gameid,
               gamename,
+              alttype,
               playeronealtscore,
               playertwoaltscore,
               playerthreealtscore,
@@ -1987,8 +1988,8 @@ pub fn main() {
 
             let assert Ok(conn) = sqlight.open("tracker.db")
             let sql =
-              "INSERT INTO alternateGameScores (gameid, gameName, playerOneAltScore, playerTwoAltScore, playerThreeAltScore, 
-                playerFourAltScore, playerFiveAltScore, playerSixAltScore) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+              "INSERT INTO alternateGameScores (gameid, gameName, altType, playerOneAltScore, playerTwoAltScore, playerThreeAltScore, 
+                playerFourAltScore, playerFiveAltScore, playerSixAltScore) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);"
             let assert Ok(_result) =
               sqlight.query(
                 sql,
@@ -1996,12 +1997,13 @@ pub fn main() {
                 with: [
                   sqlight.int(gameid),
                   sqlight.text(gamename),
-                  sqlight.text(playeronealtscore),
-                  sqlight.nullable(sqlight.text, playertwoaltscore),
-                  sqlight.nullable(sqlight.text, playerthreealtscore),
-                  sqlight.nullable(sqlight.text, playerfouraltscore),
-                  sqlight.nullable(sqlight.text, playerfivealtscore),
-                  sqlight.nullable(sqlight.text, playersixaltscore),
+                  sqlight.text(alttype),
+                  sqlight.int(playeronealtscore),
+                  sqlight.nullable(sqlight.int, playertwoaltscore),
+                  sqlight.nullable(sqlight.int, playerthreealtscore),
+                  sqlight.nullable(sqlight.int, playerfouraltscore),
+                  sqlight.nullable(sqlight.int, playerfivealtscore),
+                  sqlight.nullable(sqlight.int, playersixaltscore),
                 ],
                 expecting: customlist_decoder(),
               )
@@ -2035,7 +2037,8 @@ pub fn main() {
             use json_result <- wisp.require_json(req)
             let assert Ok(#(
               gameid,
-              gamename,
+              _gamename,
+              _alttype,
               playeronealtscore,
               playertwoaltscore,
               playerthreealtscore,
@@ -2054,12 +2057,12 @@ pub fn main() {
                 sql,
                 on: conn,
                 with: [
-                  sqlight.text(playeronealtscore),
-                  sqlight.nullable(sqlight.text, playertwoaltscore),
-                  sqlight.nullable(sqlight.text, playerthreealtscore),
-                  sqlight.nullable(sqlight.text, playerfouraltscore),
-                  sqlight.nullable(sqlight.text, playerfivealtscore),
-                  sqlight.nullable(sqlight.text, playersixaltscore),
+                  sqlight.int(playeronealtscore),
+                  sqlight.nullable(sqlight.int, playertwoaltscore),
+                  sqlight.nullable(sqlight.int, playerthreealtscore),
+                  sqlight.nullable(sqlight.int, playerfouraltscore),
+                  sqlight.nullable(sqlight.int, playerfivealtscore),
+                  sqlight.nullable(sqlight.int, playersixaltscore),
                   sqlight.int(gameid),
                 ],
                 expecting: customlist_decoder(),
@@ -2168,8 +2171,8 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    // |> mist.port(8000)
-    |> mist.port(6220)
+    |> mist.port(8000)
+    // |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
