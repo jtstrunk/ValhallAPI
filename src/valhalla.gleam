@@ -270,6 +270,42 @@ pub fn gamecharacter_decoder() {
   ))
 }
 
+pub fn alternatescore_decoder() {
+  use id <- decode.field("gameid", decode.int)
+  use gamename <- decode.field("gamename", decode.string)
+  use playeronealtscore <- decode.field("playerOneAltScore", decode.string)
+  use playertwoaltscore <- decode.field(
+    "playerTwoAltScore",
+    decode.optional(decode.string),
+  )
+  use playerthreealtscore <- decode.field(
+    "playerThreeAltScore",
+    decode.optional(decode.string),
+  )
+  use playerfouraltscore <- decode.field(
+    "playerFourAltScore",
+    decode.optional(decode.string),
+  )
+  use playerfivealtscore <- decode.field(
+    "playerFiveAltScore",
+    decode.optional(decode.string),
+  )
+  use playersixaltscore <- decode.field(
+    "playerSixAltScore",
+    decode.optional(decode.string),
+  )
+  decode.success(#(
+    id,
+    gamename,
+    playeronealtscore,
+    playertwoaltscore,
+    playerthreealtscore,
+    playerfouraltscore,
+    playerfivealtscore,
+    playersixaltscore,
+  ))
+}
+
 pub fn currentuser_stats_decoder() {
   use wins <- decode.field(0, decode.int)
   use plays <- decode.field(1, decode.int)
@@ -450,6 +486,45 @@ pub fn characters_endec() {
       #(
         "characterSix",
         charactersix |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+    ])
+  decode.success(charactersjson)
+}
+
+pub fn alternatescore_endec() {
+  use gameid <- decode.field(0, decode.int)
+  use gamename <- decode.field(1, decode.string)
+  use altscoreone <- decode.field(2, decode.string)
+  use altscoretwo <- decode.field(3, decode.optional(decode.string))
+  use altscorethree <- decode.field(4, decode.optional(decode.string))
+  use altscorefour <- decode.field(5, decode.optional(decode.string))
+  use altscorefive <- decode.field(6, decode.optional(decode.string))
+  use altscoresix <- decode.field(7, decode.optional(decode.string))
+
+  let charactersjson =
+    json.object([
+      #("gameid", json.int(gameid)),
+      #("gamename", json.string(gamename)),
+      #("characterOne", json.string(altscoreone)),
+      #(
+        "characterTwo",
+        altscoretwo |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterThree",
+        altscorethree |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterFour",
+        altscorefour |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterFive",
+        altscorefive |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "characterSix",
+        altscoresix |> option.map(json.string) |> option.unwrap(json.null()),
       ),
     ])
   decode.success(charactersjson)
@@ -1848,6 +1923,150 @@ pub fn main() {
 
             let gameupdated_json =
               json.object([#("event", json.string("Updated Game Characters"))])
+
+            json.to_string_tree(gameupdated_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
+      ["getalternatescore", encoded_gameid] -> {
+        let gameid = case int.parse(encoded_gameid) {
+          Ok(i) -> i
+          Error(_) -> 0
+        }
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT gameid, playerOneAltScore, playerTwoAltScore, playerThreeAltScore, playerFourAltScore, 
+            playerFiveAltScore, playerSixAltScore FROM gameCharacter WHERE gameid = ?;"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(gameid)],
+            expecting: alternatescore_endec(),
+          )
+
+        let json_array = json.preprocessed_array(result)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
+      ["insertalternatescore"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(
+              gameid,
+              gamename,
+              playeronealtscore,
+              playertwoaltscore,
+              playerthreealtscore,
+              playerfouraltscore,
+              playerfivealtscore,
+              playersixaltscore,
+            )) = decode.run(json_result, alternatescore_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "INSERT INTO alternateGameScores (gameid, gameName, playerOneAltScore, playerTwoAltScore, playerThreeAltScore, 
+                playerFourAltScore, playerFiveAltScore, playerSixAltScore) VALUES (?, ?, ?, ?, ?, ?, ?, ?);"
+            let assert Ok(_result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [
+                  sqlight.int(gameid),
+                  sqlight.text(gamename),
+                  sqlight.text(playeronealtscore),
+                  sqlight.nullable(sqlight.text, playertwoaltscore),
+                  sqlight.nullable(sqlight.text, playerthreealtscore),
+                  sqlight.nullable(sqlight.text, playerfouraltscore),
+                  sqlight.nullable(sqlight.text, playerfivealtscore),
+                  sqlight.nullable(sqlight.text, playersixaltscore),
+                ],
+                expecting: customlist_decoder(),
+              )
+
+            let gameinserted_json =
+              json.object([#("event", json.string("Inserted Game Alt Scores"))])
+
+            json.to_string_tree(gameinserted_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
+      ["updatealternatescore"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(
+              gameid,
+              gamename,
+              playeronealtscore,
+              playertwoaltscore,
+              playerthreealtscore,
+              playerfouraltscore,
+              playerfivealtscore,
+              playersixaltscore,
+            )) = decode.run(json_result, alternatescore_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "UPDATE gameCharacter SET playerOneAltScore = ?, playerTwoAltScore = ?, playerThreeAltScore = ?, 
+                playerFourAltScore = ?, playerFiveAltScore = ?, playerSixAltScore = ? WHERE gameid = ?;"
+
+            let assert Ok(_result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [
+                  sqlight.text(playeronealtscore),
+                  sqlight.nullable(sqlight.text, playertwoaltscore),
+                  sqlight.nullable(sqlight.text, playerthreealtscore),
+                  sqlight.nullable(sqlight.text, playerfouraltscore),
+                  sqlight.nullable(sqlight.text, playerfivealtscore),
+                  sqlight.nullable(sqlight.text, playersixaltscore),
+                  sqlight.int(gameid),
+                ],
+                expecting: customlist_decoder(),
+              )
+
+            let gameupdated_json =
+              json.object([#("event", json.string("Updated Game Alt Scores"))])
 
             json.to_string_tree(gameupdated_json)
             |> wisp.json_response(200)
