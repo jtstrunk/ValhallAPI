@@ -554,6 +554,27 @@ pub fn headtohead_endec() {
   decode.success(gamejson)
 }
 
+pub fn bossmonsterid_endec() {
+  use winnername <- decode.field(0, decode.string)
+  use winnerscore <- decode.field(1, decode.int)
+  use winnerwounds <- decode.field(2, decode.int)
+  use secoondname <- decode.field(3, decode.string)
+  use secoondscore <- decode.field(4, decode.int)
+  use secoondwounds <- decode.field(5, decode.int)
+
+  let bossmonsterjson =
+    json.object([
+      #("winnername", json.string(winnername)),
+      #("winnerscore", json.int(winnerscore)),
+      #("winnerwounds", json.int(winnerwounds)),
+      #("secoondname", json.string(secoondname)),
+      #("secoondscore", json.int(secoondscore)),
+      #("secoondwounds", json.int(secoondwounds)),
+    ])
+
+  decode.success(bossmonsterjson)
+}
+
 // encoders
 pub fn games_row_encoder(record: GameRecord) -> json.Json {
   json.object([
@@ -2161,6 +2182,41 @@ pub fn main() {
         |> wisp.set_header("access-control-allow-origin", "*")
         |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
         |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
+      ["getbossmonsteruserstats", encoded_user, encoded_usertwo,] -> {
+        let user = case uri.percent_decode(encoded_user) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+        let usertwo = case uri.percent_decode(encoded_usertwo) {
+          Ok(decoded_name) -> decoded_name
+          Error(_) -> "Invalid name"
+        }
+        
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "select GR.winnerName, GR.winnerScore, AGS.playerOneAltScore as firstWounds, 
+            GR.secondName, GR.secondScore, AGS.playerTwoAltScore as secoundWounds from gameRecord GR
+            left join alternateGameScores AGS on GR.gameid = AGS.gameid
+            WHERE GR.gameName == 'Boss Monster' AND ( GR.winnerName = ? OR  GR.winnerName = ?) AND ( GR.secondName = ? OR  GR.secondName = ?);"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [
+              sqlight.text(user),
+              sqlight.text(usertwo),
+              sqlight.text(user),
+              sqlight.text(usertwo)
+            ],
+            expecting: bossmonsterid_endec(),
+          )
+
+        let json_array = json.preprocessed_array(result)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
       }
 
       _ -> wisp.not_found()
