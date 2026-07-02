@@ -270,6 +270,15 @@ pub fn gamecharacter_decoder() {
   ))
 }
 
+pub fn wondersduelvictory_decoder() {
+  use id <- decode.field("gameid", decode.int)
+  use wintype <- decode.field("type", decode.string)
+  use winnername <- decode.field("winnername", decode.optional(decode.string))
+  use losername <- decode.field("losername", decode.optional(decode.string))
+
+  decode.success(#(id, wintype, winnername, losername))
+}
+
 pub fn alternatescore_decoder() {
   use id <- decode.field("gameid", decode.int)
   use gamename <- decode.field("gamename", decode.string)
@@ -526,6 +535,22 @@ pub fn alternatescore_endec() {
         "scoreSix",
         altscoresix |> option.map(json.int) |> option.unwrap(json.null()),
       ),
+    ])
+  decode.success(altscoresjson)
+}
+
+pub fn wondersduelvictory_endec() {
+  use gameid <- decode.field(0, decode.int)
+  use wintype <- decode.field(1, decode.string)
+  use winnername <- decode.field(2, decode.string)
+  use losername <- decode.field(3, decode.string)
+
+  let altscoresjson =
+    json.object([
+      #("gameid", json.int(gameid)),
+      #("wintype", json.string(wintype)),
+      #("winnername", json.string(winnername)),
+      #("losername", json.string(losername)),
     ])
   decode.success(altscoresjson)
 }
@@ -2103,6 +2128,152 @@ pub fn main() {
           }
         }
       }
+      ["getwondersduelvictory", encoded_gameid] -> {
+        let gameid = case int.parse(encoded_gameid) {
+          Ok(i) -> i
+          Error(_) -> 0
+        }
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql =
+          "SELECT gameid, type, winnername, losername FROM wondersDuelVictory WHERE gameid = ?;"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(gameid)],
+            expecting: wondersduelvictory_endec(),
+          )
+
+        let json_array = json.preprocessed_array(result)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
+      ["insertwondersduelvictory"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(gameid, wintype, winnername, losername)) =
+              decode.run(json_result, wondersduelvictory_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "INSERT INTO wondersDuelVictory (gameid, type, winnername, losername) VALUES (?, ?, ?, ?);"
+            let assert Ok(_result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [
+                  sqlight.int(gameid),
+                  sqlight.text(wintype),
+                  sqlight.nullable(sqlight.text, winnername),
+                  sqlight.nullable(sqlight.text, losername),
+                ],
+                expecting: wondersduelvictory_decoder(),
+              )
+
+            let gameinserted_json =
+              json.object([
+                #("event", json.string("Inserted Wonders Duel Victory")),
+              ])
+
+            json.to_string_tree(gameinserted_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
+      ["updatewondersduelvictory"] -> {
+        case req.method {
+          http.Options -> {
+            wisp.ok()
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header(
+              "access-control-allow-methods",
+              "GET, POST, OPTIONS",
+            )
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          http.Post -> {
+            use json_result <- wisp.require_json(req)
+            let assert Ok(#(gameid, wintype, winnername, losername)) =
+              decode.run(json_result, wondersduelvictory_decoder())
+
+            let assert Ok(conn) = sqlight.open("tracker.db")
+            let sql =
+              "UPDATE wondersDuelVictory SET type = ?, winnername = ?, losername = ? WHERE gameid = ?;"
+
+            let assert Ok(_result) =
+              sqlight.query(
+                sql,
+                on: conn,
+                with: [
+                  sqlight.text(wintype),
+                  sqlight.nullable(sqlight.text, winnername),
+                  sqlight.nullable(sqlight.text, losername),
+                  sqlight.int(gameid),
+                ],
+                expecting: wondersduelvictory_decoder(),
+              )
+
+            let gameupdated_json =
+              json.object([
+                #("event", json.string("Updated Wonders Duel Victory")),
+              ])
+
+            json.to_string_tree(gameupdated_json)
+            |> wisp.json_response(200)
+            |> wisp.set_header("access-control-allow-origin", "*")
+            |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+            |> wisp.set_header("access-control-allow-headers", "Content-Type")
+          }
+          _ -> {
+            wisp.method_not_allowed([http.Options, http.Post])
+          }
+        }
+      }
+      ["deletewondersduelvictory", encoded_gameid] -> {
+        let gameid = case int.parse(encoded_gameid) {
+          Ok(i) -> i
+          Error(_) -> 0
+        }
+
+        let assert Ok(conn) = sqlight.open("tracker.db")
+        let sql = "DELETE FROM wondersDuelVictory WHERE gameid = ?;"
+        let assert Ok(result) =
+          sqlight.query(
+            sql,
+            on: conn,
+            with: [sqlight.int(gameid)],
+            expecting: wondersduelvictory_endec(),
+          )
+
+        let json_array = json.preprocessed_array(result)
+
+        json.to_string_tree(json_array)
+        |> wisp.json_response(200)
+        |> wisp.set_header("access-control-allow-origin", "*")
+        |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
+        |> wisp.set_header("access-control-allow-headers", "Content-Type")
+      }
       ["getanygameheadtohead", encoded_user, encoded_usertwo] -> {
         let user = case uri.percent_decode(encoded_user) {
           Ok(decoded_name) -> decoded_name
@@ -2183,7 +2354,7 @@ pub fn main() {
         |> wisp.set_header("access-control-allow-methods", "POST, OPTIONS")
         |> wisp.set_header("access-control-allow-headers", "Content-Type")
       }
-      ["getbossmonsteruserstats", encoded_user, encoded_usertwo,] -> {
+      ["getbossmonsteruserstats", encoded_user, encoded_usertwo] -> {
         let user = case uri.percent_decode(encoded_user) {
           Ok(decoded_name) -> decoded_name
           Error(_) -> "Invalid name"
@@ -2192,7 +2363,7 @@ pub fn main() {
           Ok(decoded_name) -> decoded_name
           Error(_) -> "Invalid name"
         }
-        
+
         let assert Ok(conn) = sqlight.open("tracker.db")
         let sql =
           "select GR.winnerName, GR.winnerScore, AGS.playerOneAltScore as firstWounds, 
@@ -2207,7 +2378,7 @@ pub fn main() {
               sqlight.text(user),
               sqlight.text(usertwo),
               sqlight.text(user),
-              sqlight.text(usertwo)
+              sqlight.text(usertwo),
             ],
             expecting: bossmonsterid_endec(),
           )
@@ -2227,8 +2398,8 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    // |> mist.port(8000)
-    |> mist.port(6220)
+    |> mist.port(8000)
+    // |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
