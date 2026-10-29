@@ -37,6 +37,9 @@ pub type GameRecord {
     sixthscore: option.Option(Int),
     seventhname: option.Option(String),
     seventhscore: option.Option(Int),
+    wincondition: option.Option(String),
+    winningteam: option.Option(String),
+    secondteam: option.Option(String),
     date: String,
   )
 }
@@ -86,6 +89,12 @@ fn insert_decoder() {
   use sixthscore <- decode.field("sixthscore", decode.optional(decode.int))
   use seventhname <- decode.field("seventhname", decode.optional(decode.string))
   use seventhscore <- decode.field("seventhscore", decode.optional(decode.int))
+  use wincondition <- decode.field(
+    "wincondition",
+    decode.optional(decode.string),
+  )
+  use winningteam <- decode.field("winningteam", decode.optional(decode.string))
+  use secondteam <- decode.field("secondteam", decode.optional(decode.string))
   use date <- decode.field("date", decode.optional(decode.string))
 
   decode.success(#(
@@ -105,6 +114,9 @@ fn insert_decoder() {
     sixthscore,
     seventhname,
     seventhscore,
+    wincondition,
+    winningteam,
+    secondteam,
     date,
   ))
 }
@@ -125,6 +137,12 @@ fn update_decoder() {
   use sixthscore <- decode.field("sixthscore", decode.optional(decode.int))
   use seventhname <- decode.field("seventhname", decode.optional(decode.string))
   use seventhscore <- decode.field("seventhscore", decode.optional(decode.int))
+  use wincondition <- decode.field(
+    "wincondition",
+    decode.optional(decode.string),
+  )
+  use winningteam <- decode.field("winningteam", decode.optional(decode.string))
+  use secondteam <- decode.field("secondteam", decode.optional(decode.string))
   use date <- decode.field("date", decode.string)
 
   decode.success(#(
@@ -143,6 +161,9 @@ fn update_decoder() {
     sixthscore,
     seventhname,
     seventhscore,
+    wincondition,
+    winningteam,
+    secondteam,
     date,
   ))
 }
@@ -166,6 +187,9 @@ pub fn games_row_decoder() {
   use date <- decode.field(15, decode.string)
   use seventhname <- decode.field(16, decode.optional(decode.string))
   use seventhscore <- decode.field(17, decode.optional(decode.int))
+  use wincondition <- decode.field(18, decode.optional(decode.string))
+  use winningteam <- decode.field(19, decode.optional(decode.string))
+  use secondteam <- decode.field(20, decode.optional(decode.string))
 
   decode.success(GameRecord(
     gameid,
@@ -185,6 +209,9 @@ pub fn games_row_decoder() {
     sixthscore,
     seventhname,
     seventhscore,
+    wincondition,
+    winningteam,
+    secondteam,
     date,
   ))
 }
@@ -378,6 +405,9 @@ pub fn games_row_endec() {
   use date <- decode.field(15, decode.string)
   use seventhname <- decode.field(16, decode.optional(decode.string))
   use seventhscore <- decode.field(17, decode.optional(decode.int))
+  use wincondition <- decode.field(18, decode.optional(decode.string))
+  use winningteam <- decode.field(19, decode.optional(decode.string))
+  use secondteam <- decode.field(20, decode.optional(decode.string))
 
   let rowjson =
     json.object([
@@ -433,6 +463,18 @@ pub fn games_row_endec() {
       #(
         "seventhscore",
         seventhscore |> option.map(json.int) |> option.unwrap(json.null()),
+      ),
+      #(
+        "wincondition",
+        wincondition |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "winningteam",
+        winningteam |> option.map(json.string) |> option.unwrap(json.null()),
+      ),
+      #(
+        "secondteam",
+        secondteam |> option.map(json.string) |> option.unwrap(json.null()),
       ),
       #("date", json.string(date)),
     ])
@@ -658,6 +700,24 @@ pub fn games_row_encoder(record: GameRecord) -> json.Json {
       "seventhscore",
       record.seventhscore |> option.map(json.int) |> option.unwrap(json.null()),
     ),
+    #(
+      "wincondition",
+      record.wincondition
+        |> option.map(json.string)
+        |> option.unwrap(json.null()),
+    ),
+    #(
+      "winningteam",
+      record.winningteam
+        |> option.map(json.string)
+        |> option.unwrap(json.null()),
+    ),
+    #(
+      "secondteam",
+      record.secondteam
+        |> option.map(json.string)
+        |> option.unwrap(json.null()),
+    ),
     #("date", json.string(record.date)),
   ])
 }
@@ -750,6 +810,9 @@ pub fn main() {
               sixthscore,
               seventhname,
               seventhscore,
+              wincondition,
+              winningteam,
+              secondteam,
               date,
             )) = decode.run(json_result, insert_decoder())
 
@@ -773,8 +836,8 @@ pub fn main() {
             }
 
             let sql =
-              "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, sixthName, sixthScore, date, seventhname, seventhscore)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              "INSERT INTO gameRecord (gameID, posterID, gameName, winnerName, winnerScore, secondName, secondScore, thirdName, thirdScore, fourthName, fourthScore, fifthName, fifthScore, sixthName, sixthScore, date, seventhname, seventhscore, winCondition, winningTeam, secondTeam)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
             let _ =
               io.debug(
@@ -797,6 +860,9 @@ pub fn main() {
                   sqlight.text(gamedate),
                   sqlight.nullable(sqlight.text, seventhname),
                   sqlight.nullable(sqlight.int, seventhscore),
+                  sqlight.nullable(sqlight.text, wincondition),
+                  sqlight.nullable(sqlight.text, winningteam),
+                  sqlight.nullable(sqlight.text, secondteam),
                 ]),
               )
 
@@ -841,12 +907,15 @@ pub fn main() {
               sixthscore,
               seventhname,
               seventhscore,
+              wincondition,
+              winningteam,
+              secondteam,
               date,
             )) = decode.run(json_result, update_decoder())
 
             let assert Ok(conn) = sqlight.open("tracker.db")
             let sql =
-              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, sixthname = ?, sixthscore = ?, seventhname = ?, seventhscore = ?, date = ? WHERE gameID = ?"
+              "UPDATE gameRecord SET winnername = ?, winnerscore = ?, secondName = ?, secondScore = ?, thirdName = ?, thirdScore = ?, fourthName = ?, fourthScore = ?, fifthName = ?, fifthScore = ?, sixthname = ?, sixthscore = ?, seventhname = ?, seventhscore = ?, wincondition = ?, winningteam = ?, secondteam = ?, date = ? WHERE gameID = ?"
 
             let _ =
               io.debug(
@@ -865,6 +934,9 @@ pub fn main() {
                   sqlight.nullable(sqlight.int, sixthscore),
                   sqlight.nullable(sqlight.text, seventhname),
                   sqlight.nullable(sqlight.int, seventhscore),
+                  sqlight.nullable(sqlight.text, wincondition),
+                  sqlight.nullable(sqlight.text, winningteam),
+                  sqlight.nullable(sqlight.text, secondteam),
                   sqlight.text(date),
                   sqlight.int(gameid),
                 ]),
@@ -2398,7 +2470,7 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    |> mist.port(8000)
+    // |> mist.port(8000)
     // |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
