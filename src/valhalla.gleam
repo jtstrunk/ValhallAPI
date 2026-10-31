@@ -186,24 +186,81 @@ fn update_decoder() {
   use gameid <- decode.field("gameid", decode.int)
   use winnername <- decode.field("winnername", decode.string)
   use winnerscore <- decode.field("winnerscore", decode.int)
-  use secondname <- decode.field("secondname", decode.optional(decode.string))
-  use secondscore <- decode.field("secondscore", decode.optional(decode.int))
-  use thirdname <- decode.field("thirdname", decode.optional(decode.string))
-  use thirdscore <- decode.field("thirdscore", decode.optional(decode.int))
-  use fourthname <- decode.field("fourthname", decode.optional(decode.string))
-  use fourthscore <- decode.field("fourthscore", decode.optional(decode.int))
-  use fifthname <- decode.field("fifthname", decode.optional(decode.string))
-  use fifthscore <- decode.field("fifthscore", decode.optional(decode.int))
-  use sixthname <- decode.field("sixthname", decode.optional(decode.string))
-  use sixthscore <- decode.field("sixthscore", decode.optional(decode.int))
-  use seventhname <- decode.field("seventhname", decode.optional(decode.string))
-  use seventhscore <- decode.field("seventhscore", decode.optional(decode.int))
-  use wincondition <- decode.field(
-    "wincondition",
+  use secondname <- decode.optional_field(
+    "secondname",
+    option.None,
     decode.optional(decode.string),
   )
-  use winningteam <- decode.field("winningteam", decode.optional(decode.string))
-  use secondteam <- decode.field("secondteam", decode.optional(decode.string))
+  use secondscore <- decode.optional_field(
+    "secondscore",
+    option.None,
+    decode.optional(decode.int),
+  )
+  use thirdname <- decode.optional_field(
+    "thirdname",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use thirdscore <- decode.optional_field(
+    "thirdscore",
+    option.None,
+    decode.optional(decode.int),
+  )
+  use fourthname <- decode.optional_field(
+    "fourthname",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use fourthscore <- decode.optional_field(
+    "fourthscore",
+    option.None,
+    decode.optional(decode.int),
+  )
+  use fifthname <- decode.optional_field(
+    "fifthname",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use fifthscore <- decode.optional_field(
+    "fifthscore",
+    option.None,
+    decode.optional(decode.int),
+  )
+  use sixthname <- decode.optional_field(
+    "sixthname",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use sixthscore <- decode.optional_field(
+    "sixthscore",
+    option.None,
+    decode.optional(decode.int),
+  )
+  use seventhname <- decode.optional_field(
+    "seventhname",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use seventhscore <- decode.optional_field(
+    "seventhscore",
+    option.None,
+    decode.optional(decode.int),
+  )
+  use wincondition <- decode.optional_field(
+    "wincondition",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use winningteam <- decode.optional_field(
+    "winningteam",
+    option.None,
+    decode.optional(decode.string),
+  )
+  use secondteam <- decode.optional_field(
+    "secondteam",
+    option.None,
+    decode.optional(decode.string),
+  )
   use date <- decode.field("date", decode.string)
 
   decode.success(#(
