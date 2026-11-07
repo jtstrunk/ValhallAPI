@@ -618,6 +618,124 @@ pub fn users_endec() {
   decode.success(rowjson)
 }
 
+pub fn supported_games_endec() {
+  supported_games_decoder(False)
+}
+
+fn supported_games_decoder(include_playcount: Bool) {
+  use gameid <- decode.field(0, decode.int)
+  use gamename <- decode.field(1, decode.string)
+  use minimumplayercount <- decode.field(2, decode.int)
+  use maximumplayercount <- decode.field(3, decode.int)
+  use sortorder <- decode.field(4, decode.int)
+  let fields = [
+    #("gameid", json.int(gameid)),
+    #("gamename", json.string(gamename)),
+    #("minimumplayercount", json.int(minimumplayercount)),
+    #("maximumplayercount", json.int(maximumplayercount)),
+    #("sortorder", json.int(sortorder)),
+  ]
+  case include_playcount {
+    False -> decode.success(json.object(fields))
+    True -> {
+      use playcount <- decode.field(5, decode.int)
+      decode.success(
+        json.object(
+          list.append(fields, [
+            #("playcount", json.int(playcount)),
+          ]),
+        ),
+      )
+    }
+  }
+}
+
+pub fn get_supported_games(conn: sqlight.Connection) {
+  sqlight.query(
+    "SELECT GameID, GameName, MinimumPlayerCount, MaximumPlayerCount, SortOrder
+     FROM supportedGames ORDER BY SortOrder ASC, GameID ASC",
+    on: conn,
+    with: [],
+    expecting: supported_games_endec(),
+  )
+}
+
+pub fn get_user_supported_games(conn: sqlight.Connection, username: String) {
+  sqlight.query(
+    "WITH user_counts AS (
+       SELECT gameName, COUNT(*) AS playcount
+       FROM gameRecord
+       WHERE winnerName = ? OR secondName = ? OR thirdName = ?
+          OR fourthName = ? OR fifthName = ? OR sixthName = ? OR seventhName = ?
+       GROUP BY gameName
+     )
+     SELECT sg.GameID, sg.GameName, sg.MinimumPlayerCount,
+            sg.MaximumPlayerCount, sg.SortOrder,
+            COALESCE(uc.playcount, 0) AS playcount
+     FROM supportedGames AS sg
+     LEFT JOIN user_counts AS uc ON uc.gameName = sg.GameName
+     ORDER BY playcount DESC, sg.SortOrder ASC, sg.GameID ASC",
+    on: conn,
+    with: list.repeat(sqlight.text(username), 7),
+    expecting: supported_games_decoder(True),
+  )
+}
+
+fn supported_games_response(
+  req: wisp.Request,
+  username: option.Option(String),
+) -> wisp.Response {
+  let response = case req.method {
+    http.Options -> {
+      wisp.ok()
+      |> wisp.set_header("access-control-allow-methods", "GET, OPTIONS")
+      |> wisp.set_header("access-control-allow-headers", "Content-Type")
+    }
+    http.Get -> {
+      case sqlight.open("tracker.db") {
+        Error(error) -> {
+          wisp.log_error(
+            "Failed to open supported games database: " <> error.message,
+          )
+          wisp.internal_server_error()
+        }
+        Ok(conn) -> {
+          let result = case username {
+            option.None -> get_supported_games(conn)
+            option.Some(name) -> get_user_supported_games(conn, name)
+          }
+          let response = case result {
+            Ok(rows) -> {
+              rows
+              |> json.preprocessed_array
+              |> json.to_string_tree
+              |> wisp.json_response(200)
+            }
+            Error(error) -> {
+              wisp.log_error(
+                "Failed to retrieve supported games: " <> error.message,
+              )
+              wisp.internal_server_error()
+            }
+          }
+          case sqlight.close(conn) {
+            Ok(_) -> response
+            Error(error) -> {
+              wisp.log_error(
+                "Failed to close supported games database: " <> error.message,
+              )
+              wisp.internal_server_error()
+            }
+          }
+        }
+      }
+    }
+    _ -> wisp.method_not_allowed([http.Get, http.Options])
+  }
+  response
+  |> wisp.set_header("access-control-allow-origin", "*")
+}
+
 pub fn follow_endec() {
   use id <- decode.field(0, decode.int)
   let name = get_user_name(id)
@@ -1296,6 +1414,19 @@ pub fn main() {
         json.to_string_tree(name_rows)
         |> wisp.json_response(200)
         |> wisp.set_header("access-control-allow-origin", "*")
+      }
+      ["getsupportedgames"] -> {
+        supported_games_response(req, option.None)
+      }
+      ["getsupportedgames", encoded_name] -> {
+        case uri.percent_decode(encoded_name) {
+          Ok(name) -> supported_games_response(req, option.Some(name))
+          Error(_) -> {
+            wisp.log_warning("Invalid username encoding for supported games")
+            wisp.bad_request()
+            |> wisp.set_header("access-control-allow-origin", "*")
+          }
+        }
       }
       ["getusers"] -> {
         let assert Ok(conn) = sqlight.open("tracker.db")
@@ -2588,8 +2719,8 @@ pub fn main() {
   let assert Ok(_) =
     wisp_mist.handler(handler, secret_key_base)
     |> mist.new
-    // |> mist.port(8000)
-    |> mist.port(6220)
+    |> mist.port(8000)
+    // |> mist.port(6220)
     |> mist.bind("0.0.0.0")
     |> mist.start_http
   process.sleep_forever()
